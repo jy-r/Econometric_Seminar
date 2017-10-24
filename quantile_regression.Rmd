@@ -1,0 +1,85 @@
+---
+title: "Quantile Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(foreign)
+require(knitr)
+require(quantreg)
+```
+
+
+```{r load_data}
+dta <- read.dta("dta/mus03data.dta")
+dta <- dta[,c("ltotexp", "suppins","totchr", "age", "female", "white")]
+dta <- na.omit(dta) #obs 2955
+```
+
+### Descriptive statistics
+
+```{r}
+summary(dta)
+```
+
+
+### Plots
+
+```{r}
+(quantile(dta$ltotexp, c(0.1, 0.5, 0.9)))
+plot(seq(0,1, by = (1/(2955-1))),dta$ltotexp, type="s", xlab="fraction of the data", ylab="quantiles of ln(totexp) if totexp >0")
+abline(v=c(0.1, 0.5, 0.9), col="red")
+```
+
+#OLS regression 
+
+```{r}
+summary(lm.model <- lm(ltotexp~., data=dta))
+```
+
+### Median regression
+
+```{r}
+summary(qr.model.5 <- rq(ltotexp~., data=dta, tau=0.5))
+```
+
+
+```{r}
+#effects(qr.model.5)
+```
+### Comparing Qunatile Regression and OLS
+
+```{r}
+df.compare <- data.frame(OLS.coef = summary(lm.model)$coefficients[,1], OLS.tval= summary(lm.model)$coefficients[,3])
+
+for(q in c(0.10, 0.25, 0.50, 0.75, 0.90)){
+  model <- rq(ltotexp~., data=dta, tau=q)
+  assign(paste0("qr.model",q), model)
+  df.compare<-cbind(df.compare, summary(model)$coefficients[,1], summary(model)$coefficients[,3])
+}
+
+colnames(df.compare) <- c("OLS.coef","OLS.tval", "QR.10.coef", "QR.10.tval", "QR.25.coef", "QR.25.tval", "QR.50.coef", "QR.50.tval", "QR.75.coef", "QR.75.tval", "QR.90.coef", "QR.90.tval")
+```
+
+
+```{r, echo=FALSE}
+kable(df.compare)
+```
+
+
+```{r}
+anova(qr.model0.25, qr.model0.5)
+anova(qr.model0.5, qr.model0.75)
+```
+
+$H_0$ no difference in coefficients
+
+
+```{r}
+plot(rq(ltotexp~., data=dta, tau=seq(.1,0.9,0.05)), mar = c(5.1, 4.1, 2.1, 2.1), xlab="Quantile",  cex = 1, pch = 19, mfrow=c(2,3) )
+
+```
+
+
+
