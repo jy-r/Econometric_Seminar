@@ -8,14 +8,44 @@ knitr::opts_chunk$set(echo = TRUE)
 require(foreign)
 require(knitr)
 require(quantreg)
+require(ggplot2)
+require(gridExtra)
+require(RColorBrewer)
+require(splines)
 ```
 
+### Introduction 
+
+example from MICROECONOMETRICS USING STATA - A. Colin Cameron and Pravin K. Trivedi 
+package required for quantile regression is `guantreg`
+
+
+### Loading data 
+
+for loading Stat data format we can use `read.dta` from `foreign`
 
 ```{r load_data}
 dta <- read.dta("dta/mus03data.dta")
-dta <- dta[,c("ltotexp", "suppins","totchr", "age", "female", "white")]
-dta <- na.omit(dta) #obs 2955
+apply(dta, 2,function(x) sum(is.na(x))) # number of NA in each column
 ```
+
+
+```{r}
+dta <- dta[,c("ltotexp", "suppins","totchr", "age", "female", "white")]
+dta <- na.omit(dta)
+```
+
+
+| Variable | Description                  | Type    |
+|----------|------------------------------|---------|
+| ltotexp  | log of medical expenditure   | num     |
+| suppins  | supplement private insurance | binary  |
+| totchr   | healt status                 | num     |
+| age      | age 65-90                    | integer |
+| female   | gender                       | binary  |
+| white    | race                         | binary  |
+
+
 
 ### Descriptive statistics
 
@@ -26,17 +56,50 @@ summary(dta)
 
 ### Plots
 
-```{r}
+```{r, echo=FALSE}
+ggplot(dta) + 
+  geom_boxplot(aes(as.factor(age), ltotexp)) + 
+  facet_grid(~white) + xlab("Age") + ggtitle("Boxplot of ltotexp by age and race")
+#--------------------------------
+ggplot(dta) + 
+  geom_boxplot(aes(as.factor(suppins), ltotexp)) + 
+  facet_grid(~white) + xlab("Supplement private insurance") + ggtitle("Boxplot of ltotexp by supplement private insurance and race")
+#--------------------------------
+ggplot(dta) + 
+  geom_boxplot(aes(as.factor(totchr), ltotexp)) + 
+  facet_grid(~white) + xlab("Health status") + ggtitle("Boxplot of ltotexp by health status and race")
+#--------------------------------
+colourCount = length(unique(dta$age))
+getPalette = colorRampPalette(brewer.pal(9, "YlGnBu"))
+ggplot(dta) + geom_histogram(aes(totchr, fill=as.factor(age), group= age), bins=7) + 
+  scale_fill_manual(values = getPalette(colourCount))+ggtitle("Histogram of totchr")+guides(fill=guide_legend(title="Age"))
+
+```
+
+
+```{r , echo=FALSE}
 (quantile(dta$ltotexp, c(0.1, 0.5, 0.9)))
-plot(seq(0,1, by = (1/(2955-1))),dta$ltotexp, type="s", xlab="fraction of the data", ylab="quantiles of ln(totexp) if totexp >0")
+plot(seq(0,1, by = (1/(2955-1))),dta$ltotexp, type="s", main = "ln(totexp)",xlab="fraction of the data", ylab="quantiles of ln(totexp) if totexp >0")
 abline(v=c(0.1, 0.5, 0.9), col="red")
 ```
 
 #OLS regression 
 
 ```{r}
-summary(lm.model <- lm(ltotexp~., data=dta))
+summary(lm.model <- lm(ltotexp~suppins+age+female+white+totchr, data=dta))
 ```
+
+```{r, echo=FALSE}
+resid <- residuals(lm.model)
+fitted <- fitted(lm.model)
+grid.arrange(
+ggplot()+geom_point(aes(fitted,resid))+geom_hline(yintercept=mean(resid), colour="red"),
+ggplot()+geom_boxplot(aes(as.factor(dta$age),resid))+geom_hline(yintercept=mean(resid), colour="red"),
+ggplot()+geom_boxplot(aes(as.factor(dta$totchr),resid))+geom_hline(yintercept=mean(resid), colour="red"),
+ggplot()+geom_line(aes(1:length(dta$ltotexp),dta$ltotexp))+geom_line(aes(1:length(dta$ltotexp),fitted, colour="red")),
+  ncol = 2, nrow = 2)
+```
+
 
 ### Median regression
 
@@ -50,36 +113,59 @@ summary(qr.model.5 <- rq(ltotexp~., data=dta, tau=0.5))
 ```
 ### Comparing Qunatile Regression and OLS
 
-```{r}
+```{r , echo=FALSE}
 df.compare <- data.frame(OLS.coef = summary(lm.model)$coefficients[,1], OLS.tval= summary(lm.model)$coefficients[,3])
-
+df.compare.coef <- data.frame(OLS.coef = summary(lm.model)$coefficients[,1])
+df.compare.tval <- data.frame(OLS.tval= summary(lm.model)$coefficients[,3])
 for(q in c(0.10, 0.25, 0.50, 0.75, 0.90)){
   model <- rq(ltotexp~., data=dta, tau=q)
   assign(paste0("qr.model",q), model)
   df.compare<-cbind(df.compare, summary(model)$coefficients[,1], summary(model)$coefficients[,3])
+  df.compare.coef<-cbind(df.compare.coef, summary(model)$coefficients[,1])
+  df.compare.tval<-cbind(df.compare.tval,summary(model)$coefficients[,3])
 }
 
 colnames(df.compare) <- c("OLS.coef","OLS.tval", "QR.10.coef", "QR.10.tval", "QR.25.coef", "QR.25.tval", "QR.50.coef", "QR.50.tval", "QR.75.coef", "QR.75.tval", "QR.90.coef", "QR.90.tval")
+colnames(df.compare.coef) <- c("OLS.coef", "QR.10.coef", "QR.25.coef",  "QR.50.coef", "QR.75.coef",  "QR.90.coef")
+colnames(df.compare.tval) <- c("OLS.tval", "QR.10.tval",  "QR.25.tval",  "QR.50.tval",  "QR.75.tval",  "QR.90.tval")
 ```
 
 
 ```{r, echo=FALSE}
 kable(df.compare)
+kable(df.compare.coef)
+kable(df.compare.tval)
+#df.compare
+#df.compare.coef
+#df.compare.tval
 ```
 
 
 ```{r}
 anova(qr.model0.25, qr.model0.5)
 anova(qr.model0.5, qr.model0.75)
+anova(qr.model0.25,qr.model0.75)
 ```
 
 $H_0$ no difference in coefficients
 
 
-```{r}
-plot(rq(ltotexp~., data=dta, tau=seq(.1,0.9,0.05)), mar = c(5.1, 4.1, 2.1, 2.1), xlab="Quantile",  cex = 1, pch = 19, mfrow=c(2,3) )
-
+```{r, echo=FALSE}
+plot(qr.model<-rq(ltotexp~., data=dta, tau=seq(.1,0.9,0.1)), mar = c(5.1, 4.1, 2.1, 2.1), xlab="Quantile", mfrow=c(2,3) )
 ```
 
+
+```{r, echo=FALSE}
+qr.model_plot<-rq(ltotexp~totchr, data=dta, tau=c(0.1,0.25,0.5,0.75,0.09))
+resid <- residuals(qr.model_plot)
+fitted <- fitted(qr.model_plot)
+ggplot()+ 
+  geom_line(aes(dta$totchr,fitted[,1], color=paste("tau 0.1")))+
+  geom_line(aes(dta$totchr,fitted[,2], color=paste("tau 0.25")))+
+  geom_line(aes(dta$totchr,fitted[,3], color=paste("tau 0.5")))+
+  geom_line(aes(dta$totchr,fitted[,4], color=paste("tau 0.75")))+
+  geom_line(aes(dta$totchr,fitted[,5], color=paste("tau 0.90")))+
+  xlab("totchr")+ylab("fitted values")
+```
 
 
