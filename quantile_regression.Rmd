@@ -17,13 +17,14 @@ require(splines)
 
 ### Introduction 
 
-Example from MICROECONOMETRICS USING STATA - A. Colin Cameron and Pravin K. Trivedi 
+This example is from MICROECONOMETRICS USING STATA 
+(A. C. Cameron and P. K. Trivedi)
 R package required for quantile regression is `{guantreg}`
 
 
 ### Loading data 
 
-for loading Stat data format we can use `read.dta` from `foreign`
+To load data in Stata format, we can use `read.dta` from `{foreign}`
 
 ```{r load_data}
 dta <- read.dta("dta/mus03data.dta")
@@ -34,6 +35,7 @@ apply(dta, 2,function(x) sum(is.na(x))) # number of NA in each column
 ```{r}
 dta <- dta[,c("ltotexp", "suppins","totchr", "age", "female", "white")]
 dta <- na.omit(dta)
+str(dta)
 ```
 
 
@@ -41,10 +43,10 @@ dta <- na.omit(dta)
 |----------|------------------------------|---------|
 | ltotexp  | log of medical expenditure   | num     |
 | suppins  | supplement private insurance | binary  |
-| totchr   | healt status                 | num     |
-| age      | age 65-90                    | integer |
-| female   | gender                       | binary  |
-| white    | race                         | binary  |
+| totchr   | # of chronic problems        | num     |
+| age      | age (sample: 65-90)          | integer |
+| female   | gender dummy                 | binary  |
+| white    | race dummy                   | binary  |
 
 
 
@@ -55,25 +57,38 @@ summary(dta)
 ```
 
 
-### Plots
+### Descriptive plots
 
 ```{r, echo=FALSE}
 ggplot(dta) + 
+  geom_boxplot(aes(as.factor(age), ltotexp)) +
+  facet_grid(~white) +
+  xlab("Age, White = 1") +
+  ylab("log of medical expenditure") +
+  ggtitle("Boxplot of ltotexp by age and race")
+#--------------------------------
+ggplot(dta) + 
   geom_boxplot(aes(as.factor(age), ltotexp)) + 
-  facet_grid(~white) + xlab("Age") + ggtitle("Boxplot of ltotexp by age and race")
+  facet_grid(~female) + xlab("Age, Female = 1") + 
+  ylab("log of medical expenditure") +
+  ggtitle("Boxplot of ltotexp by age and gender")
 #--------------------------------
 ggplot(dta) + 
   geom_boxplot(aes(as.factor(suppins), ltotexp)) + 
-  facet_grid(~white) + xlab("Supplement private insurance") + ggtitle("Boxplot of ltotexp by supplement private insurance and race")
+  facet_grid(~white) + xlab("Supplement private insurance") + 
+  ylab("log of medical expenditure") +
+  ggtitle("Boxplot of ltotexp by supplement private insurance and race")
 #--------------------------------
 ggplot(dta) + 
   geom_boxplot(aes(as.factor(totchr), ltotexp)) + 
-  facet_grid(~white) + xlab("Health status") + ggtitle("Boxplot of ltotexp by health status and race")
+  facet_grid(~white) + xlab("Health status") + 
+  ylab("log of medical expenditure") +
+  ggtitle("Boxplot of ltotexp by health status and race")
 #--------------------------------
 colourCount = length(unique(dta$age))
 getPalette = colorRampPalette(brewer.pal(9, "YlGnBu"))
 ggplot(dta) + geom_histogram(aes(totchr, fill=as.factor(age), group= age), bins=7) + 
-  scale_fill_manual(values = getPalette(colourCount))+ggtitle("Histogram of totchr")+guides(fill=guide_legend(title="Age"))
+  scale_fill_manual(values = getPalette(colourCount))+ggtitle("Histogram: Count of of chronic problems by age")+guides(fill=guide_legend(title="Age"))
 
 ```
 
