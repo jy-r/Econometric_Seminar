@@ -43,7 +43,7 @@ str(dta)
 |----------|------------------------------|---------|
 | ltotexp  | log of medical expenditure   | num     |
 | suppins  | supplement private insurance | binary  |
-| totchr   | # of chronic problems        | num     |
+| totchr   | # of chronic problems (0-7)  | num     |
 | age      | age (sample: 65-90)          | integer |
 | female   | gender dummy                 | binary  |
 | white    | race dummy                   | binary  |
