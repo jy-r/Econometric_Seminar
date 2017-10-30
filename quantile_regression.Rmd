@@ -1,6 +1,7 @@
 ---
 title: "Quantile Regression"
-output: html_document
+output:
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -16,8 +17,8 @@ require(splines)
 
 ### Introduction 
 
-example from MICROECONOMETRICS USING STATA - A. Colin Cameron and Pravin K. Trivedi 
-package required for quantile regression is `guantreg`
+Example from MICROECONOMETRICS USING STATA - A. Colin Cameron and Pravin K. Trivedi 
+R package required for quantile regression is `{guantreg}`
 
 
 ### Loading data 
