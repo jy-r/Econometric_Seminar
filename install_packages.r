@@ -4,7 +4,9 @@ required_packages <- c("ggplot2",
                        "GGally",
                        "dplyr",
                        "knitr",
-                       "quantreg")
+                       "quantreg",
+                       "pls",
+                       "ISLR")
 missing_packages <-
   required_packages[!(required_packages %in% installed.packages()[, "Package"])]
 if (length(missing_packages) > 0) {
