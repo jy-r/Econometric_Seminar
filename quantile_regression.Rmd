@@ -12,7 +12,6 @@ require(quantreg)
 require(ggplot2)
 require(gridExtra)
 require(RColorBrewer)
-require(splines)
 ```
 
 ### Introduction 
