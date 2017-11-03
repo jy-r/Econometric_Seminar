@@ -8,10 +8,11 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 set.seed(2)
 require(knitr)
+require(plotly)
 require(pls)
 require(ISLR)
 require(ggplot2)
-library(psych)
+require(psych)
 ```
 
 ## Data
