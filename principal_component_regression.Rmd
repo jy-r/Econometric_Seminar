@@ -11,6 +11,7 @@ require(knitr)
 require(pls)
 require(ISLR)
 require(ggplot2)
+library(psych)
 ```
 
 ## Data
@@ -55,6 +56,75 @@ ols.fitted <- predict(ols.fit)
 ols.fitted
 MSE.ols <- mean((ols.fitted - Hitters$Salary)^2)
 MSE.ols
+```
+
+## Principal Component Analysis
+
+```{r}
+mat <- Hitters[,-19] #exclude salary
+unique(mat$Division) #E W
+unique(mat$NewLeague) #A N
+unique(mat$League) #A N
+#encoding factors 
+mat$Division <- as.numeric(mat$Division=="E")
+mat$NewLeague <- as.numeric(mat$NewLeague=="A")
+mat$League <- as.numeric(mat$League=="A")
+mat <- as.matrix(mat)
+dim(mat)
+```
+
+KMO test
+KMO > .9 were marvelous, in the .80s, mertitourious, in the .70s, middling, in the .60s, medicore, in the 50s, miserable, and less than .5, unacceptable.
+```{r}
+KMO(mat)
+```
+0.71 
+
+```{r}
+pca <- princomp(mat,cor=T)
+screeplot(pca, type="lines")
+summary(pca)
+pca$loadings[,1:3]
+```
+
+Rotation for better intepretation of components. 
+PCA with package `psych`.
+Covar = F because matrix is not scaled. 
+
+```{r}
+scree(cor(mat))
+pca2 <- principal(mat, nfactors=3, covar=F, rotate="varimax")
+pca2
+```
+
+Interpretation:
+RC1 - seniority of player
+RC2 - players performance in 1986
+RC3 - 
+
+
+```{r}
+gdta <- data.frame(Salary=Hitters$Salary,RC1=pca2$scores[,1],RC2=pca2$scores[,2])
+gdta$Name <- row.names(Hitters)
+ggplotly(
+  ggplot(gdta)+
+    geom_point(aes(RC1,RC2,color=Salary, name=Name))+
+    scale_colour_gradient(low="yellow",high="red")+
+    xlab("PC1")+
+    ylab("PC2"),
+  tooltip = c("Name", "Salary")
+  )
+
+```
+
+```{r}
+Hitters["-Mike Schmidt",]
+Hitters["-Don Mattingly",]
+```
+
+
+```{r}
+summary(lm(Hitters$Salary~pca2$scores))
 ```
 
 
