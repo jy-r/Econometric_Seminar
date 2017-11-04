@@ -54,7 +54,7 @@ Hitters <- na.omit(Hitters)
 ## Ridge regression
 
 ```{r}
-x =  model.matrix(Salary~.,Hitters)[,-1]
+x =  model.matrix(Salary~., Hitters)[ , -1]
 y = Hitters$Salary
 ```
 
@@ -66,8 +66,8 @@ lambda (regularization/penality) coefficient can be selected automatically by `g
 we estimate model for lambda <0, 10^10,> 
 
 ```{r}
-grid = 10^seq(10,-2,length=100)
-ridge.mod = glmnet(x,y,alpha=0, lambda=grid)
+grid = 10^seq(10, -2, length=100)
+ridge.mod = glmnet(x, y ,alpha=0, lambda=grid)
 ```
 
 20 coefficients for 101 models
@@ -81,7 +81,7 @@ dim(coef(ridge.mod))
 ridge.mod$lambda[50]
 #coef
 coef(ridge.mod)[,50]
-sqrt(sum(coef(ridge.mod)[-1,50]^2))
+sqrt(sum(coef(ridge.mod)[-1, 50]^2))
 ```
 
 ```{r}
@@ -89,13 +89,13 @@ sqrt(sum(coef(ridge.mod)[-1,50]^2))
 ridge.mod$lambda[60]
 #coef
 coef(ridge.mod)[,60]
-sqrt(sum(coef(ridge.mod)[-1,60]^2))
+sqrt(sum(coef(ridge.mod)[-1, 60]^2))
 ```
 
 smaller lambda = larger coefficients
 
 ```{r}
-predict(ridge.mod, s=50, type ="coefficients")[1:20, ]
+predict(ridge.mod, s=50, type="coefficients")[1:20, ]
 ```
 
 ## Cross-Validation
@@ -110,18 +110,18 @@ y.test=y[test]
 
 
 ```{r}
-ridge.mod =glmnet(x[train, ], y[train], alpha =0, lambda =grid, thresh =1e-12)
+ridge.mod=glmnet(x[train, ], y[train], alpha=0, lambda=grid, thresh=1e-12)
 ```
 
 Model with lambda = 4
 ```{r}
-ridge.pred=predict (ridge.mod ,s=4, newx=x[test ,])
-mean((ridge.pred-y.test)^2)
+ridge.pred=predict(ridge.mod, s=4, newx = x[test ,])
+mean((ridge.pred - y.test)^2)
 ```
 
 Model consisting only of constant (intercept) - no variability explaind 
 ```{r}
-mean((mean(y[train])-y.test)^2)
+mean((mean(y[train]) - y.test)^2)
 ```
 
 Similar result with very large lambda 
@@ -132,8 +132,8 @@ mean((ridge.pred-y.test)^2)
 
 Ridge model with lambda = 0 is equal to least squares
 ```{r}
-ridge.pred=predict(ridge.mod,s=0, exact=T, newx=x[test, ])
-mean((ridge.pred-y.test)^2)
+ridge.pred=predict(ridge.mod, s=0, exact=T, newx=x[test, ])
+mean((ridge.pred - y.test)^2)
 (lm(y∼x, subset=train))
 (predict(ridge.mod, s=0, exact=T, type="coefficients")[1:20 ,])
 ```
@@ -142,22 +142,56 @@ function `cv.glmnet()` - cross-validation function, default = ten-fold
 
 ```{r}
 set.seed(1)
-cv.out =cv.glmnet(x[train ,],y[train],alpha =0)
+cv.out =cv.glmnet(x[train ,], y[train], alpha =0)
 plot(cv.out)
 bestlam =cv.out$lambda.min
 bestlam
 ```
 
 ```{r}
-ridge.pred=predict(ridge.mod, s=bestlam ,newx=x[test ,])
-mean((ridge.pred-y.test)^2)
+ridge.pred=predict(ridge.mod, s=bestlam, newx=x[test ,])
+mean((ridge.pred - y.test)^2)
 ```
 
 Estimed on full data set
 
 ```{r}
-out=glmnet(x,y,alpha =0)
-predict(out, type="coefficients",s=bestlam )[1:20 ,]
+out=glmnet(x, y, alpha =0)
+predict(out, type="coefficients", s=bestlam )[1:20 ,]
 ```
 
 No zero coefficients => ridge regression doesnt perform variable selection.
+
+
+## Lasso Regression
+
+alpha = 1 
+
+```{r}
+lasso.mod=glmnet(x[train, ], y[train], alpha=1, lambda=grid)
+```
+
+
+```{r}
+plot(lasso.mod)
+```
+
+
+```{r}
+cv.out=cv.glmnet(x[train ,], y[train], alpha=1)
+plot(cv.out)
+(bestlam=cv.out$lambda.min)
+```
+
+```{r}
+lasso.pred=predict(lasso.mod, s=bestlam, newx=x[test, ])
+mean((lasso.pred - y.test)^2)
+```
+
+```{r}
+out=glmnet(x,y,alpha=1, lambda=grid)
+lasso.coef=predict(out ,type="coefficients", s=bestlam)[1:20, ]
+lasso.coef
+```
+
+Some coefficeint are zero => Lasso regression can be used to performe variable selection. 
