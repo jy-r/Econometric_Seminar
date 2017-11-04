@@ -1,0 +1,163 @@
+---
+title: "Ridge Regression"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(2)
+require(knitr)
+require(plotly)
+require(ggplot2)
+require(ISLR)
+require(glmnet)
+```
+
+## Data 
+
+```{r}
+Hitters <- Hitters
+names(Hitters)
+summary(Hitters)
+sum(is.na(Hitters$Salary))
+Hitters <- na.omit(Hitters)
+```
+
+| Variable   | Description                                                                         |   |
+|------------|-------------------------------------------------------------------------------------|---|
+| AtBat      |  Number of times at bat in 1986                                                     |   |
+| Hits       |  Number of hits in 1986                                                             |   |
+| HmRun      |  Number of home runs in 1986                                                        |   |
+| Runs       |  Number of runs in 1986                                                             |   |
+| RBI        |  Number of runs batted in in 1986                                                   |   |
+| Walks      |  Number of walks in 1986                                                            |   |
+| Years      |  Number of years in the major   leagues                                             |   |
+| CAtBat     |  Number of times at bat during his   career                                         |   |
+| CHits      |  Number of hits during his career                                                   |   |
+| CHmRun     |  Number of home runs during his   career                                            |   |
+| CRuns      |  Number of runs during his career                                                   |   |
+| CRBI       |  Number of runs batted in during   his career                                       |   |
+| Cwalks     |  Number of walks during his career                                                  |   |
+| League     |  A factor with levels A and N   indicating player’s league at the end of 1986       |   |
+| Division   |  A factor with levels E and W   indicating player’s division at the end of 1986     |   |
+| PutOuts    |  Number of put outs in 1986                                                         |   |
+| Assists    |  Number of assists in 1986                                                          |   |
+| Errors     |  Number of errors in 1986                                                           |   |
+| Salary     |  1987 annual salary on opening day   in thousands of dollars                        |   |
+| NewLeague  |  A factor with levels A and N   indicating player’s league at the beginning of 1987 |   |
+
+
+
+`model.matrix()` - function need input in matrix $\mathbf{X}$ and vector $\mathbf{y}$
+
+## Ridge regression
+
+```{r}
+x =  model.matrix(Salary~.,Hitters)[,-1]
+y = Hitters$Salary
+```
+
+
+function `glmnet()` - lasso, ridge regression
+alpha = 0 - ridge regression
+alpha = 1 - lasso regression
+lambda (regularization/penality) coefficient can be selected automatically by `glmnet()` itself
+we estimate model for lambda <0, 10^10,> 
+
+```{r}
+grid = 10^seq(10,-2,length=100)
+ridge.mod = glmnet(x,y,alpha=0, lambda=grid)
+```
+
+20 coefficients for 101 models
+
+```{r}
+dim(coef(ridge.mod))
+```
+
+```{r}
+#value of lambda
+ridge.mod$lambda[50]
+#coef
+coef(ridge.mod)[,50]
+sqrt(sum(coef(ridge.mod)[-1,50]^2))
+```
+
+```{r}
+#value of lambda
+ridge.mod$lambda[60]
+#coef
+coef(ridge.mod)[,60]
+sqrt(sum(coef(ridge.mod)[-1,60]^2))
+```
+
+smaller lambda = larger coefficients
+
+```{r}
+predict(ridge.mod, s=50, type ="coefficients")[1:20, ]
+```
+
+## Cross-Validation
+
+
+```{r}
+set.seed(1)
+train=sample(1: nrow(x), nrow(x)/2)
+test=(-train)
+y.test=y[test]
+```
+
+
+```{r}
+ridge.mod =glmnet(x[train, ], y[train], alpha =0, lambda =grid, thresh =1e-12)
+```
+
+Model with lambda = 4
+```{r}
+ridge.pred=predict (ridge.mod ,s=4, newx=x[test ,])
+mean((ridge.pred-y.test)^2)
+```
+
+Model consisting only of constant (intercept) - no variability explaind 
+```{r}
+mean((mean(y[train])-y.test)^2)
+```
+
+Similar result with very large lambda 
+```{r}
+ridge.pred=predict(ridge.mod ,s=1e10 ,newx=x[test, ])
+mean((ridge.pred-y.test)^2)
+```
+
+Ridge model with lambda = 0 is equal to least squares
+```{r}
+ridge.pred=predict(ridge.mod,s=0, exact=T, newx=x[test, ])
+mean((ridge.pred-y.test)^2)
+(lm(y∼x, subset=train))
+(predict(ridge.mod, s=0, exact=T, type="coefficients")[1:20 ,])
+```
+
+function `cv.glmnet()` - cross-validation function, default = ten-fold
+
+```{r}
+set.seed(1)
+cv.out =cv.glmnet(x[train ,],y[train],alpha =0)
+plot(cv.out)
+bestlam =cv.out$lambda.min
+bestlam
+```
+
+```{r}
+ridge.pred=predict(ridge.mod, s=bestlam ,newx=x[test ,])
+mean((ridge.pred-y.test)^2)
+```
+
+Estimed on full data set
+
+```{r}
+out=glmnet(x,y,alpha =0)
+predict(out, type="coefficients",s=bestlam )[1:20 ,]
+```
+
+No zero coefficients => ridge regression doesnt perform variable selection.
