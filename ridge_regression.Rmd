@@ -6,7 +6,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-set.seed(2)
+set.seed(1)
 require(knitr)
 require(plotly)
 require(ggplot2)
@@ -68,6 +68,7 @@ we estimate model for lambda <0, 10^10,>
 ```{r}
 grid = 10^seq(10, -2, length=100)
 ridge.mod = glmnet(x, y ,alpha=0, lambda=grid)
+plot(ridge.mod, xvar="lambda", label=TRUE)
 ```
 
 20 coefficients for 101 models
@@ -131,12 +132,20 @@ mean((ridge.pred-y.test)^2)
 ```
 
 Ridge model with lambda = 0 is equal to least squares (for recalculation with s=0 exact should be set to T)
+Comparison of MSEs
 ```{r}
-ridge.mod2=glmnet(x[train, ], y[train], alpha=0, lambda=0, thresh=1e-12)
-ridge.pred=predict(ridge.mod2, s=0, exact=T, newx=x[test, ])
+ridge.pred=predict(ridge.mod, x=x[train,] , y=y[train] ,s=0, exact=T, newx=x[test, ])
 mean((ridge.pred - y.test)^2)
+lm.mod <- lm(Salary~., data=Hitters, subset=train)
+lm.pred <- predict(lm.mod, newdata = Hitters[-train,])
+mean((lm.pred - y.test)^2)
+```
+
+Ridge model with lambda = 0 is equal to least squares (for recalculation with s=0 exact should be set to T)
+Coefficient comparison
+```{r}
 (lm(y~x, subset=train))
-(predict(ridge.mod2, s=0, exact=T, type="coefficients")[1:20 ,])
+(predict(ridge.mod, x=x[train,] , y=y[train] ,s=0, exact=T, type="coefficients")[1:20 ,])
 ```
 
 function `cv.glmnet()` - cross-validation function, default = ten-fold
