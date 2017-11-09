@@ -130,12 +130,12 @@ ridge.pred=predict(ridge.mod ,s=1e10 ,newx=x[test, ])
 mean((ridge.pred-y.test)^2)
 ```
 
-Ridge model with lambda = 0 is equal to least squares
+Ridge model with lambda = 0 is equal to least squares (for recalculation with s=0 exact should be set to T)
 ```{r}
-ridge.pred=predict(ridge.mod, s=0, exact=T, newx=x[test, ])
+ridge.pred=predict(ridge.mod, s=0, exact=F, newx=x[test, ])
 mean((ridge.pred - y.test)^2)
-(lm(y∼x, subset=train))
-(predict(ridge.mod, s=0, exact=T, type="coefficients")[1:20 ,])
+(lm(y~x, subset=train))
+(predict(ridge.mod, s=0, exact=F, type="coefficients")[1:20 ,])
 ```
 
 function `cv.glmnet()` - cross-validation function, default = ten-fold
