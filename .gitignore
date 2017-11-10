@@ -1,4 +1,6 @@
-.Rdata
-.pdf
+.Rproj.user
+.Rhistory
+.RData
 .html
+packrat/lib*/
 markdown*/*
