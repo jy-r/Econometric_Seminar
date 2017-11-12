@@ -7,6 +7,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 set.seed(2)
+source("install_packages.r")
 require(knitr)
 require(plotly)
 require(ggplot2)

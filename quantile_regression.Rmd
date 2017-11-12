@@ -6,6 +6,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
 require(foreign)
 require(knitr)
 require(quantreg)
