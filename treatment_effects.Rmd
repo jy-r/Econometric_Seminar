@@ -132,7 +132,7 @@ lapply(c("AGE","EDUC","MARR","BLACK","HISP","NODEGREE"), function(x){t.test(dta[
 
 
 ```{r}
-summary(glm1 <- glm(T~.,   family = binomial(), data=dta))
+summary(glm1 <- glm(T~.-RE78,   family = binomial(), data=dta))
 ```
 
 ```{r}
@@ -280,7 +280,7 @@ plot(fit1)
 
 
 ```{r}
-summary(glm1 <- glm(T~.,   family = binomial(), data=dta))
+summary(glm1 <- glm(T~.-RE78,   family = binomial(), data=dta))
 dtanew <- dta
 dtanew$p <- predict(glm1, type = "response")
 #split_table <- read.csv(choose.files(), header=FALSE)
@@ -297,7 +297,7 @@ table(dtanew$group)
 split_table$obs
 table(dtanew[,c("T","group")])
 n <- data.frame(n=table(dtanew[,c("T","group")])[2,], group=0:8)
-n[5,"n"]<-15
+n[5,"n"]<-14
 n[6,"n"] <- 13
 n[9,"n"]<-7
 
@@ -317,7 +317,7 @@ dtanew.matched <- rbind(dtanew.matched, sample_n(dtanew[dtanew$group==i&dtanew$T
 dtanew.matched %>% group_by(group, T) %>% select(AGE,EDUC,RE74,MARR,BLACK,HISP,NODEGREE) %>% summarise_all(funs(mean(.)))
 
 summary(lm(RE78~T,data=dtanew.matched))
-summary(lm(RE78~.-group,data=dtanew.matched))
+summary(lm(RE78~.-group-p,data=dtanew.matched))
 ```
 
 
