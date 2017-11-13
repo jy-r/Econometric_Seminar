@@ -267,14 +267,15 @@ summary(lm_treat1)
 ## Package ATE
 
 ```{r}
-# Y<-dta[,"RE78"]
-# treat<-dta[,"T"]
-# X<-dta[,!colnames(dta)%in%c("T","RE78","RE74","RE75","RE742","RE752","EDUC2","BLACKU74")]
-# 
-# fit1<- ATE(Y,treat,X)
-# fit1
-# summary(fit1)
-# plot(fit1)
+data("nsw")
+Y<-nsw[,"re78"]
+treat<-nsw[,"treat"]
+X<-nsw[,!colnames(nsw)%in%c("treat","re78")]
+
+fit1<- ATE(Y,treat,X)
+fit1
+summary(fit1)
+plot(fit1)
 ```
 
 
@@ -316,6 +317,7 @@ dtanew.matched <- rbind(dtanew.matched, sample_n(dtanew[dtanew$group==i&dtanew$T
 dtanew.matched %>% group_by(group, T) %>% select(AGE,EDUC,RE74,MARR,BLACK,HISP,NODEGREE) %>% summarise_all(funs(mean(.)))
 
 summary(lm(RE78~T,data=dtanew.matched))
+summary(lm(RE78~.-group,data=dtanew.matched))
 ```
 
 
