@@ -132,7 +132,7 @@ lapply(c("AGE","EDUC","MARR","BLACK","HISP","NODEGREE"), function(x){t.test(dta[
 
 
 ```{r}
-summary(glm1 <- glm(T~AGE+BLACK+HISP+NODEGREE,   family = binomial(), data=dta))
+summary(glm1 <- glm(T~.,   family = binomial(), data=dta))
 ```
 
 ```{r}
@@ -152,7 +152,7 @@ grid.arrange(
 
 ```{r}
 formula <- formula(paste0("T~",paste0(colnames(dta)[!colnames(dta) %in% c("T","RE78")], collapse="+")))
-mod_match <- matchit(T~AGE+BLACK+HISP+MARR+NODEGREE, method="nearest",distance="logit", data=dta)
+mod_match <- matchit(formula, method="nearest",distance="logit", data=dta)
 ```
 
 ```{r}
@@ -191,8 +191,7 @@ dta.m %>% group_by(T) %>% select(AGE,EDUC,RE74,MARR,BLACK,HISP,NODEGREE) %>% sum
 ```
 
 ```{r}
-lapply(c("AGE","EDUC","MARR","BLACK","HISP","NODEGREE"), function(x){print(x)
-  t.test(dta.m[,x]~dta.m[,"T"])})
+lapply(c("AGE","EDUC","MARR","BLACK","HISP","NODEGREE"), function(x){t.test(dta.m[,x]~dta.m[,"T"])})
 ```
 
 ```{r}
