@@ -279,6 +279,45 @@ summary(lm_treat1)
 ```
 
 
+```{r}
+summary(glm1 <- glm(T~.,   family = binomial(), data=dta))
+dtanew <- dta
+dtanew$p <- predict(glm1, type = "response")
+#split_table <- read.csv(choose.files(), header=FALSE)
+#dput(split_table)
+split_table <- structure(list(V1 = 1:8, V2 = c(0.000591, 0.098016, 0.19544, 
+0.390289, 0.585138, 0.779986, 0.877411, 0.926123), V3 = c(0.098016, 
+0.19544, 0.390289, 0.585138, 0.779986, 0.877411, 0.926123, 0.974835
+), V4 = c(1041L, 63L, 65L, 36L, 32L, 17L, 7L, 86L)), .Names = c("group", 
+"lower", "upper", "obs"), class = "data.frame", row.names = c(NA, -8L
+))
+
+dtanew$group <- findInterval(dtanew$p, split_table$lower) 
+table(dtanew$group)
+split_table$obs
+table(dtanew[,c("T","group")])
+n <- data.frame(n=table(dtanew[,c("T","group")])[2,], group=0:8)
+n[5,"n"]<-15
+n[6,"n"] <- 13
+n[9,"n"]<-7
+
+dtanew %>% group_by(group, T) %>% select(AGE,EDUC,RE74,MARR,BLACK,HISP,NODEGREE) %>% summarise_all(funs(mean(.)))
+
+for(i in sort(unique(dtanew$group))[-c(1,7,8,9)]){
+  lapply(c("AGE","EDUC","MARR","BLACK","HISP","NODEGREE"), function(x){
+  print(paste(x,t.test(dtanew[dtanew$group==i,x]~dtanew[dtanew$group==i,"T"])$p.value))}
+    )
+}
+
+dtanew.matched <- dtanew[dtanew$T==1,]
+for(i in sort(unique(dtanew$group))[-c(1,7,8)]){
+dtanew.matched <- rbind(dtanew.matched, sample_n(dtanew[dtanew$group==i&dtanew$T==0,],size=n[n$group==i,"n"], replace=FALSE))
+}
+
+dtanew.matched %>% group_by(group, T) %>% select(AGE,EDUC,RE74,MARR,BLACK,HISP,NODEGREE) %>% summarise_all(funs(mean(.)))
+
+summary(lm(RE78~T,data=dtanew.matched))
+```
 
 
  
