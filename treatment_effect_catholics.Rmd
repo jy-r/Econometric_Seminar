@@ -59,6 +59,7 @@ summary(dta)
 sum(dta$catholic)
 sum(dta$catholic)/nrow(dta)
 colnames(dta)
+apply(dta, 2, function(x) sum(is.na(x)))
 ```
 
 ```{r, echo=FALSE}
@@ -69,22 +70,22 @@ grid.arrange(
   )
 
 grid.arrange(
-  ggplot(dta[dta$T==0,]) +
+  ggplot(dta[dta$catholic==0,]) +
     geom_bar(aes(x=factor(1), fill=as.factor(race_black))) + 
     coord_polar(theta = "y") + 
     guides(fill=guide_legend(title="BLACK")),
-  ggplot(dta[dta$T==1,]) +
+  ggplot(dta[dta$catholic==1,]) +
     geom_bar(aes(x=factor(1), fill=as.factor(race_black))) +
     coord_polar(theta = "y") +
     guides(fill=guide_legend(title="BLACK")),
   ncol=2
 )
 grid.arrange(
-  ggplot(dta[dta$T==0,]) +
+  ggplot(dta[dta$catholic==0,]) +
     geom_bar(aes(x=factor(1), fill=as.factor(race_hispanic))) + 
     coord_polar(theta = "y") + 
     guides(fill=guide_legend(title="HISP"))+ylab("untreated"),
-  ggplot(dta[dta$T==1,]) +
+  ggplot(dta[dta$catholic==1,]) +
     geom_bar(aes(x=factor(1), fill=as.factor(race_hispanic))) +
     coord_polar(theta = "y") +
     guides(fill=guide_legend(title="HISP"))+ylab("treated"),
@@ -165,9 +166,19 @@ sample_n(prs_df, size=5)
 
 ```{r, echo=FALSE}
 grid.arrange(
-  ggplot(prs_df[prs_df$catholic==0,])+geom_histogram(aes(x=pr_score))+ggtitle(""),
-  ggplot(prs_df[prs_df$catholic==1,])+geom_histogram(aes(x=pr_score))+
-  xlab("Probability of going to Catholic school")
+  ggplot(prs_df[prs_df$catholic==0,])+
+    geom_histogram(aes(x=pr_score))+ggtitle("")+
+    xlab("Probability of going to Catholic school"),
+  ggplot(prs_df[prs_df$catholic==1,])+
+    geom_histogram(aes(x=pr_score))+
+    xlab("Probability of going to Catholic school"),
+  ggplot(prs_df)+
+    geom_density(aes(x=pr_score, 
+                     group=as.factor(catholic),
+                     color=as.factor(catholic), 
+                     fill=as.factor(catholic)),
+                 alpha = 0.2)+
+    xlab("Probability of going to Catholic school")
 )
 ```
 
@@ -184,6 +195,7 @@ dta <- dta %>%
 ```{r}
 mod_match <- matchit(catholic~race_white+p5hmage+w3income_1k+p5numpla+w3momed_hsb, method="nearest",distance="logit", data=dta)
 ```
+
 
 ```{r}
 dta.m <- match.data(mod_match)
@@ -230,35 +242,32 @@ t.test(dta.m$c5r2mtsc_std~dta.m$catholic)
 ```{r, echo=FALSE}
 grid.arrange(
   ggplot(dta.m) + geom_boxplot(aes(as.factor(catholic),c5r2mtsc_std)),
-  ggplot(dta.m) + geom_boxplot(aes(as.factor(catholic),w3income)),
+  ggplot(dta.m) + geom_boxplot(aes(as.factor(catholic),w3income_1k)),
   ncol=2
   )
 
 grid.arrange(
-  ggplot(dta.m.m[dta.m.m$T==0,]) +
-    geom_bar(aes(x=factor(1), fill=as.factor(race_black))) + 
+  ggplot(dta.m[dta.m$catholic==0,]) +
+    geom_bar(aes(x=factor(1), fill=as.factor(race_white))) + 
     coord_polar(theta = "y") + 
-    guides(fill=guide_legend(title="BLACK")),
-  ggplot(dta.m[dta.m$T==1,]) +
-    geom_bar(aes(x=factor(1), fill=as.factor(race_black))) +
+    guides(fill=guide_legend(title="WHITE")),
+  ggplot(dta.m[dta.m$catholic==1,]) +
+    geom_bar(aes(x=factor(1), fill=as.factor(race_white))) +
     coord_polar(theta = "y") +
-    guides(fill=guide_legend(title="BLACK")),
+    guides(fill=guide_legend(title="WHITE")),
   ncol=2
 )
-grid.arrange(
-  ggplot(dta.m[dta.m$T==0,]) +
-    geom_bar(aes(x=factor(1), fill=as.factor(race_hispanic))) + 
-    coord_polar(theta = "y") + 
-    guides(fill=guide_legend(title="HISP"))+ylab("untreated"),
-  ggplot(dta.m[dta.m$T==1,]) +
-    geom_bar(aes(x=factor(1), fill=as.factor(race_hispanic))) +
-    coord_polar(theta = "y") +
-    guides(fill=guide_legend(title="HISP"))+ylab("treated"),
-  ncol=2
-)
+
+prs_df2 <- data.frame(pr_score = predict(glm(formulaglm1,   family = binomial(), data=dta.m), type = "response"),
+                     catholic = dta.m$catholic)
+  ggplot(prs_df2)+
+  geom_density(aes(x=pr_score, 
+                     group=as.factor(catholic),
+                     color=as.factor(catholic), 
+                     fill=as.factor(catholic)),
+                 alpha = 0.2)+
+    xlab("Probability of going to Catholic school")
 ```
-
-
 
 
 ```{r}
