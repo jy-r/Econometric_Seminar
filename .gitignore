@@ -2,6 +2,7 @@
 .Rhistory
 .RData
 .html
+.pdf
 packrat/lib*/
 markdown*/*
 sources

@@ -1,0 +1,212 @@
+---
+title: "Poisson regression"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+```
+
+### Introduction 
+
+Case study: Lung cancer incidence in Denmark 1968{1971
+
+This data set contains counts of incident lung cancer cases and population size in
+four neighbouring Danish cities by age group.
+
+| Variable | Description                                                     |
+|----------|-----------------------------------------------------------------|
+| city     |  factor with levels Fredericia,   Horsens, Kolding, and Vejl    |
+| age      |  factor with levels 40-54, 55-59,   60-64, 65-69, 70-74, and 75 |
+| pop      |  the number of inhabitants.                                     |
+| cases    |   the number of lung cancer cases.                              |
+
+
+### Loading data 
+
+```{r}
+lung <- read.table("dta/lung.txt",header=TRUE)
+```
+
+
+```{r}
+head(lung)
+```
+
+Incident rate is $\lambda = \frac{\textit{cases}}{\textit{pop}}$. In Fredericia for people aged 40-45 it is `r lung %>% filter(city=="Fredericia"&age=="40-54") %>% mutate(lambda = cases/pop) %>% select(lambda)`. 
+
+
+```{r, echo=FALSE}
+boxplot(cases~age,data=lung,col="bisque",main="How does the expected number of lung cancer counts vary by age?")
+```
+
+### Poisson regression
+
+
+We start considering a model with age as covariate
+$$\log(\lambda_i) = \beta_0 + \beta_1 I(\textit{Age55-59}_i) + \beta_2 I(\textit{Age60-64}_i) + \beta_3 I(\textit{Age65-69}_i) + \beta_4 I(\textit{Age70-74}_i)  + \beta_5 I(\textit{Age>74}_i) $$
+
+where $I(.)$ is a indicator (1 if TRUE, 0 otherwise) for each range of age, with
+Age40-45 is used as baseline.
+
+
+
+```{r}
+lungmod1 <- glm(cases ~ age, family=poisson, data=lung)
+summary(lungmod1)
+```
+
+
+**Interpretation**:
+
+- `exp(2.11021) = 8.24` is the expected count of cancer cases among individuals
+aged 40 - 54
+- `exp(2.1021 - 0.03077) = 8.00` is the expected count of cancer cases among
+individuals aged 55 - 59
+- `exp(-0.0377) = 0.97` is the ratio of the expected counts comparing the
+55 - 59 aged group to the baseline group of age `40 - 54. exp(`$\hat{\beta}_1$`)` is also the
+relative rate.
+
+
+If we calculate the CI's for all ages we find that all contain 0, is there any association
+between cancer and age?
+
+```{r}
+confint(lungmod1)
+```
+
+
+
+```{r}
+anova(lungmod1,test="Chisq")
+```
+
+### Likelihood Ratio Test
+
+$H_0: \beta_1=\beta_2=\dots=\beta_i$
+$H_1: non H_0$
+
+```{r}
+lungmod0 <- glm(cases ~ 1, family=poisson, data=lung)
+anova(lungmod0,lungmod1,test="Chisq")
+```
+
+
+### How to improve the analysis?
+
+- Each city and age group has a different population size.
+- So far, we have modeled expected counts for each population group, within the **4**
+year period of time, i.e., intrinsically `rate = counts/'4 years'`
+- It may be of more interest to know the rate per person, per 4 period of observation.
+We are interested in $r_i = \frac{\lambda_i}{\textit{pop}_i} = \frac{E(\textit{count}_i)}{\textit{pop}_i}$ and model it by a log-linear model
+- Then, our model is $Y_i \sim \textit{Pois}(\lambda_i) = \textit{Pois}(r_i \times \textit{pop}_i)$
+
+
+```{r, echo=FALSE}
+par(mfrow=c(1,2))
+hist(lung$pop,col="lightgrey", main="Population size")
+barplot(xtabs(pop~age,data=lung),main="Population counts by age group")
+```
+
+- All counts are restricted to the same period of 1968 􀀀 1971, the value  $\lambda_i$ are rates `per
+4-years'
+- To obtain an easier interpretation of the rates we can divide by 4 to get rate per person-year
+and multiply by 10.000 to get a rate per 10.000 person-years, i.e. divide by 2500
+
+- `log(pop/2500)` is the `offset` (try `?offset`)
+- The **offset** accounts for the population size, which could vary by age, region, etc ...
+- It gives a convenient way to model rates per person-years, instead of modeling the raw
+counts.
+
+```{r}
+lungmod2 <- glm(cases ~ age + offset(log(pop/2500)), 
+                family=poisson, data=lung)
+
+lungmod4 <- glm(cases ~ city + offset(log(pop/2500)), 
+                family=poisson, data=lung)
+
+
+summary(lungmod2)
+```
+
+Confidence intervals for the parameters can also be obtained as:
+
+```{r}
+confint(lungmod2)
+```
+
+**Interpretation**
+
+- $\beta_0$ is the log rate of cancer cases per 10.000 person years in the age group of
+40 - 54 (baseline)
+- $\beta_1$ is the log relative rate of cancer cases per 10.000 person years comparing
+the age group of 50 - 59 to the baseline age group 40 - 5
+- $\beta_2$ is the log relative rate of cancer cases per 10.000 person years comparing
+the age group of 60 - 64 to the baseline age group 40 - 54
+
+
+### Likelihood Ratio Test
+
+```{r}
+lungmod3<-glm(cases ~ 1, family = poisson, data = lung, 
+              offset = (log(pop/2500)))
+anova(lungmod3,lungmod2,test="Chisq")
+```
+
+| Without offset                       | With offset                                           |
+|--------------------------------------|-------------------------------------------------------|
+| Do not reject $H_0$                  | Reject $H_0$                                          |
+| Expected cases across the age groups | Expected cases per person year, across the age groups |
+
+
+There is no difference because the lower population Age75+ might be
+counterbalanced by high rate of cases with increasing age
+
+The offset let us compare the rate of cancer among those who are alive, i.e. taking
+into account the number of people within cohort of interest.
+
+
+cross-classifying table
+
+
+```{r}
+xtabs(pop~age,data=lung)
+xtabs(cases~age,data=lung)
+```
+
+Relative rates
+
+```{r}
+exp(coef(lungmod2))
+```
+
+
+### Assigment 
+
+Use Poisson regression to model the number of Insurace claims during a given period. Use Group /engine capacity/ and car Age as regressors. For offset, use the number of insurance-holders per Group.
+
+The data given in data frame Insurance consist of the numbers of policyholders of an insurance company who were exposed to risk, and the numbers of car insurance claims made by those policyholders in the third quarter of 1973.
+
+| Variable | Description                                                                                 |
+|----------|---------------------------------------------------------------------------------------------|
+| District | factor: district of residence of   policyholder (1 to 4): 4 is major cities.                |
+| Group    | an ordered factor: group of car   with levels <1 litre, 1–1.5 litre, 1.5–2 litre, >2 litre. |
+| Age      | an ordered factor: the age of the   insured in 4 groups labelled <25, 25–29, 30–35, >35.    |
+| Holders  | numbers of policyholders.                                                                   |
+| Claims   | numbers of claims                                                                           |
+
+```
+Insurance <- read.csv("dta/Insurance.csv") ....
+head(Insurance)
+str(Insurance)
+#
+# Estimate the Poisson regression model
+#
+# Produce Confidence intervals and comment on regressor significance.
+```
+
