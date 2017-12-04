@@ -244,3 +244,5 @@ str(Insurance)
 ```
 
 
+
+This example was based on lecture by [Dae-Jin Lee](https://idaejin.github.io/bcam-courses/neiker-2016/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
