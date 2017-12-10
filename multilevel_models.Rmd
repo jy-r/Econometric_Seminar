@@ -11,6 +11,7 @@ require(knitr)
 require(ggplot2)
 require(dplyr)
 require(nlme)
+require(lme4)
 ```
 
 ### Introduction 
@@ -77,6 +78,13 @@ We are not interested in these schools in particular, but in the population of s
 
 ## Multilevel model for group means
 
+Hierarchical data are collected when sampling takes place at two or
+more levels, one nested within the other. Some examples:
+  - Students within schools (two levels).
+  - Students within classrooms within schools (three levels).
+
+
+
 ```{r}
 ggplot(MathAchieve[School== c("91","3","31","52","74"),])+geom_boxplot(aes(School, MathAch))
 ggplot(MathAchieve[School== c("91","3","31","52","74"),])+geom_point(aes(School, MathAch))
@@ -105,13 +113,45 @@ multilev.lme
 VarCorr(multilev.lme)
 ```
 
+
+
+get beta's and predict
+
 ```{r}
 (beta0 <-  fixef(multilev.lme))
 ```
+
 
 
 ```{r}
 fixef(multilev.lme)-(predict(multilev.lme,
                              newdat=list(School=c("91","3","31","52","74"))))
 ```
+
+```{r}
+multilev.lmer<-lmer(MathAch~1+(1|School),data=MathAchieve)
+rr1 <- ranef(multilev.lmer, condVar = TRUE)
+rr1 <- data.frame(rr1) %>% mutate(sd1 = condval + condsd, sd2 = condval- condsd) 
+ggplot(rr1, aes(as.numeric(grp),condval))+
+  geom_ribbon(aes(ymin=sd2, ymax=sd1), fill = "lightblue")+
+    geom_point()+
+  xlab("schools")+
+  ylab("intercept")+
+  theme_minimal()
+```
+
+If we had considered a fixed effect model, we would get a single variance $\sigma^2=6.882$, $\sigma^2=6.882$ obtained from `summary(multilev.NULL)$sigma` Considering a random effects model, we have σ2uσu2 and σ2σ2, and the total variability of the data would be given by:
+$$Var(y_{ij}) = \sigma^2 + \sigma^2_u$$
+i.e. the variability within the schools plus the variability among the schools. The intra-class correlation coefficient would be
+$$ICC=\frac{2,93^2}{2,93^2+6,27^2}=0,18$$
+Then the 18% of the total variability is due to the difference among the averages of the schools.
+
+
+## Random slopes models
+
+
+```{r}
+(ml3 <- lme(MathAch ~ CSES, random = ~CSES|School, data=MathAchieve))
+```
+
 
