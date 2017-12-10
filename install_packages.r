@@ -12,7 +12,8 @@ required_packages <- c("ggplot2",
                        "glmnet",
                        "MatchIt",
                        "ATE",
-                       "nlme")
+                       "nlme",
+                       "lme4")
 missing_packages <-
   required_packages[!(required_packages %in% installed.packages()[, "Package"])]
 if (length(missing_packages) > 0) {
