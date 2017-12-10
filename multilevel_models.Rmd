@@ -1,0 +1,117 @@
+---
+title: "Multilevel models"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(nlme)
+```
+
+### Introduction 
+
+High School & Beyond [^1](https://en.wikipedia.org/wiki/High_School_and_Beyond]) is a nationally representative survey of U.S. public and Catholic high schools conducted by the National Center for Education Statistics (NCES). The data are a subsample of the 1982 HSB survey with 7,185 students from 160 schools. The average sample size per school is approximately 45 students.
+
+
+This example was based on lecture by [Dae-Jin Lee](http://idaejin.github.io/bcam-courses/neiker-2016/material/mixed-models/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
+
+| Variable | Description                                                          |
+|----------|----------------------------------------------------------------------|
+| School   |  an   ordered factor identifying the school that the studend attends |
+| Sex      |  Female or Male                                                      |
+| SES      |  a standardized scale of   socio-economic status                     |
+| MathAch  |  a measure of mathematics   achievement                              |
+| CSES     |  centered mean of the SES values   for the school                    |
+
+
+```{r}
+MathAchieve <- readRDS("dta/MathAchieve.Rds")
+names(MathAchieve)
+summary(MathAchieve)
+```
+
+How to center data  
+```{r, eval=FALSE}
+MathAchieve %>% group_by(School) %>% mutate(CSES = floor(100*(SES-mean(SES)))/100) %>% ungroup %>% select(CSES) 
+MathAchieve$CSES[1:10]
+```
+
+$$y_j = \beta_0 + \beta_1 x_j + \epsilon_j$$
+$$ \textit{MathAch}_j = \beta_0 + \beta_1 \textit{CSES}_j + \epsilon_j$$ 
+This model ignores that the students attends different schools ($j^{th}$ subindex corresponds to the individual unit level).
+
+
+```{r}
+(multilev0 <- lm(MathAch~CSES, data=MathAchieve))
+```
+
+
+```{r, echo=FALSE}
+plot(MathAchieve$CSES,MathAchieve$MathAch,cex=.5,col="grey")
+abline(multilev0,col=2,lwd=3)
+```
+
+
+Suppose we are interested in comparing differences between schools.
+
+
+$$y_j = \beta_0 + \beta_1 x_{ij} + \epsilon_j$$
+where the subindex $i$ indicates the school of the student, with $\beta_0$ we specify a separate intercept for each school. Indeed, what we include is a categorical variable with as many categories as schools. Model multilev1 considers the Schools as a fixed effect, i.e. we implicitly assume that we are interested in the schools of the survey.
+
+
+```{r, eval=FALSE}
+summary(lm(formula = MathAch ~ CSES + School, data = MathAchieve))
+```
+
+We can complicate more the model adding a different socio-economic status for each school, i.e. 1 unit increase of socio-econonomic status can explain different maths achievements in different schools. A model like:
+$$y_{ij}=\beta_{0i} + \beta_{1i}x_{x_{ij}} + \epsilon_{ij}$$
+now we have the subindex $i$ for the slope $\beta_{1i}$.
+
+We are not interested in these schools in particular, but in the population of schools in order to compare schools with different characteristics.
+
+
+## Multilevel model for group means
+
+```{r}
+ggplot(MathAchieve[School== c("91","3","31","52","74"),])+geom_boxplot(aes(School, MathAch))
+ggplot(MathAchieve[School== c("91","3","31","52","74"),])+geom_point(aes(School, MathAch))
+```
+
+
+We specify two levels in the model:
+- Level 1: $y_{ij} = \mu_i + \epsilon_{ij}$
+- Level 2: $\mu_i = \beta_0 + u_i$
+where $\mu_i$ is average of each school,$\beta_0$ is average of all students, $u_i$ is deviation of $i$th school from total average. Then we can write previous model as: 
+
+$$ y_{ij} = \beta_0 + u_i + \epsilon_{ij}, \quad i=1,\dots,m \quad j=1,\dots,n_m$$
+At both levels, we assume $u_i\sim N(0,\sigma^2_{u_i})$ and $\epsilon_{ij} \sim N(0,\sigma^2)$ (both independent).
+
+The mean of $y$ for the $i$th group is given by $\beta_0 + u_i$ , then $u_i$ is the deviation of the mean of iith group to the total average. Individual level residuals $\epsilon_{ij}$ are the difference between the value of the response variable of the $j$jth individual and the average of the group they belong. 
+
+We fit the model with `lme`
+
+```{r}
+multilev.lme <- lme(MathAch~1,random=~1|School, data=MathAchieve)
+multilev.lme
+```
+
+
+```{r}
+VarCorr(multilev.lme)
+```
+
+```{r}
+(beta0 <-  fixef(multilev.lme))
+```
+
+
+```{r}
+fixef(multilev.lme)-(predict(multilev.lme,
+                             newdat=list(School=c("91","3","31","52","74"))))
+```
+
