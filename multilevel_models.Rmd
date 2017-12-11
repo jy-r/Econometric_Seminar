@@ -12,14 +12,13 @@ require(ggplot2)
 require(dplyr)
 require(nlme)
 require(lme4)
+require(gridExtra)
 ```
 
 ### Introduction 
 
-High School & Beyond [^1](https://en.wikipedia.org/wiki/High_School_and_Beyond]) is a nationally representative survey of U.S. public and Catholic high schools conducted by the National Center for Education Statistics (NCES). The data are a subsample of the 1982 HSB survey with 7,185 students from 160 schools. The average sample size per school is approximately 45 students.
+High School & Beyond [^footnote](https://en.wikipedia.org/wiki/High_School_and_Beyond]) is a nationally representative survey of U.S. public and Catholic high schools conducted by the National Center for Education Statistics (NCES). The data are a subsample of the 1982 HSB survey with 7,185 students from 160 schools. The average sample size per school is approximately 45 students.
 
-
-This example was based on lecture by [Dae-Jin Lee](http://idaejin.github.io/bcam-courses/neiker-2016/material/mixed-models/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
 
 | Variable | Description                                                          |
 |----------|----------------------------------------------------------------------|
@@ -76,7 +75,7 @@ now we have the subindex $i$ for the slope $\beta_{1i}$.
 We are not interested in these schools in particular, but in the population of schools in order to compare schools with different characteristics.
 
 
-## Multilevel model for group means
+### Multilevel model for group means
 
 Hierarchical data are collected when sampling takes place at two or
 more levels, one nested within the other. Some examples:
@@ -86,8 +85,12 @@ more levels, one nested within the other. Some examples:
 
 
 ```{r}
-ggplot(MathAchieve[School== c("91","3","31","52","74"),])+geom_boxplot(aes(School, MathAch))
-ggplot(MathAchieve[School== c("91","3","31","52","74"),])+geom_point(aes(School, MathAch))
+grid.arrange(
+  ggplot(MathAchieve[MathAchieve$School== c("91","3","31","52","74"),])+
+    geom_boxplot(aes(School, MathAch)),
+  ggplot(MathAchieve[MathAchieve$School== c("91","3","31","52","74"),])+
+    geom_point(aes(School, MathAch)),
+ncol=2)
 ```
 
 
@@ -140,18 +143,100 @@ ggplot(rr1, aes(as.numeric(grp),condval))+
   theme_minimal()
 ```
 
-If we had considered a fixed effect model, we would get a single variance $\sigma^2=6.882$, $\sigma^2=6.882$ obtained from `summary(multilev.NULL)$sigma` Considering a random effects model, we have σ2uσu2 and σ2σ2, and the total variability of the data would be given by:
+If we had considered a fixed effect model, we would get a single variance $\sigma^2=6.882$, $\sigma^2=6.882$ obtained from `summary(multilev.NULL)$sigma` Considering a random effects model, we have $\sigma^2_u$ and $\sigma^2$, and the total variability of the data would be given by:
 $$Var(y_{ij}) = \sigma^2 + \sigma^2_u$$
 i.e. the variability within the schools plus the variability among the schools. The intra-class correlation coefficient would be
 $$ICC=\frac{2,93^2}{2,93^2+6,27^2}=0,18$$
 Then the 18% of the total variability is due to the difference among the averages of the schools.
 
 
-## Random slopes models
+### Random slopes models
 
+
+ $y_{ij} = \mu_i + \epsilon_{ij}$
+ $\mu_i = \beta_0 + u_i$
+ $\beta_{1i} = \beta_1 + v_i$
+ 
+ $$y_{ij}=  \underbrace{\beta_0 + \beta_1 x_{ij}}_{fixed effects} + \underbrace{u_i + v_i x_{ij} + \epsilon_{ij}}_{random effects}$$
+ 
+ $$ \bigg(\matrix{u_i \\ v_i}\bigg) \sim N(\mathbf{0},\mathbf{G_i})$$
+ $$\mathbf{G}_i =  \bigg(\matrix{\sigma^2_{u} & \sigma_{uv} \\ \sigma_{vu} & \sigma^2_{v}}\bigg)$$
 
 ```{r}
 (ml3 <- lme(MathAch ~ CSES, random = ~CSES|School, data=MathAchieve))
 ```
 
 
+
+The socio-economic status at school $i$ is estimated as $2,19+\hat{u}_i$ and the variance of the slopes among schools is $0,833^2=0$. For the average school, we predict an increase of $2,19$ units in the math achievement score when CSES increases one unit. The estimated variance are:
+$\hat{\sigma}^2_{u} = 2.946^2, \hat{\sigma}^2_{v} = 0.833^2, \hat{\sigma}_{uv} = 0.051, \hat{\sigma}^2 = 6.058^2$ 
+
+
+
+
+```{r}
+plot(ranef(ml3)[,1],ranef(ml3)[,2],
+     xlab="intercepts (u_i)", ylab="slopes (v_i)")
+```
+
+
+```{r}
+ml3a <- lme(MathAch~CSES,random = list(School=pdDiag(~CSES)),
+            data=MathAchieve)
+anova(ml3a,ml3)
+```
+
+
+
+
+
+```{r}
+test=-2*logLik(ml1, REML=TRUE) +2*logLik(ml3a, REML=TRUE)
+mean(pchisq(test,df=c(0,1),lower.tail=FALSE)) 
+```
+
+
+```{r}
+fits <- MathAchieve %>% select(CSES, School)
+fits$fit <- fitted(ml3)
+ggplot(fits)+
+  geom_line(aes(CSES,fit, group=School, color=School))+ 
+  theme_minimal()+
+  theme(legend.position="none")
+```
+
+
+```{r}
+AIC(logLik(ml3))
+AIC(logLik(ml3a))
+AIC(logLik(ml1))
+```
+
+$y_{ij} = \mu_i + \beta_{1i}x_{ij} + \epsilon_{ij}$
+ $\mu_i = \beta_0 + beta_2 s_i+ u_i$
+ $\beta_{1i} = \beta_1 + \beta_3 s_i + v_i$
+
+ $$y_{ij}=  \underbrace{\beta_0 + \beta_1 x_{ij} +\beta_2 s_i + \beta_3 x_{ij}:s_i}_{fixed effects} + \underbrace{u_i + v_i x_{ij} + \epsilon_{ij}}_{random effects}$$
+
+```{r}
+ml4 = lme(MathAch~CSES*Sector,random = list(School=pdDiag(~CSES)),
+          data=MathAchieve)
+summary(ml4)
+```
+
+```{r}
+ml4a <- update(ml4,method="ML")
+anova(ml4a)
+```
+
+
+```{r}
+fits2 <- MathAchieve %>% select(CSES, School, Sector)
+fits2$fit <- fitted(ml4)
+ggplot(fits2)+
+  geom_line(aes(CSES,fit, group=School, color=Sector))+
+  theme_minimal()
+```
+
+
+This example was based on lecture by [Dae-Jin Lee](http://idaejin.github.io/bcam-courses/neiker-2016/material/mixed-models/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
