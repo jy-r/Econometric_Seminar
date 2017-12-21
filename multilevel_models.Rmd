@@ -35,7 +35,7 @@ names(MathAchieve)
 summary(MathAchieve)
 ```
 
-How to center data  
+How to center the data  
 ```{r, eval=FALSE}
 MathAchieve %>% group_by(School) %>% mutate(CSES = floor(100*(SES-mean(SES)))/100) %>% ungroup %>% select(CSES) 
 MathAchieve$CSES[1:10]
@@ -87,10 +87,10 @@ more levels, one nested within the other. Some examples:
 ```{r}
 grid.arrange(
   ggplot(MathAchieve[MathAchieve$School== c("91","3","31","52","74"),])+
-    geom_boxplot(aes(School, MathAch)),
+      geom_boxplot(aes(School, MathAch)),
   ggplot(MathAchieve[MathAchieve$School== c("91","3","31","52","74"),])+
-    geom_point(aes(School, MathAch)),
-ncol=2)
+      geom_point(aes(School, MathAch)),
+      ncol=2)
 ```
 
 
@@ -135,12 +135,13 @@ fixef(multilev.lme)-(predict(multilev.lme,
 multilev.lmer<-lmer(MathAch~1+(1|School),data=MathAchieve)
 rr1 <- ranef(multilev.lmer, condVar = TRUE)
 rr1 <- data.frame(rr1) %>% mutate(sd1 = condval + condsd, sd2 = condval- condsd) 
+
 ggplot(rr1, aes(as.numeric(grp),condval))+
-  geom_ribbon(aes(ymin=sd2, ymax=sd1), fill = "lightblue")+
+    geom_ribbon(aes(ymin=sd2, ymax=sd1), fill = "lightblue")+
     geom_point()+
-  xlab("schools")+
-  ylab("intercept")+
-  theme_minimal()
+    xlab("schools")+
+    ylab("intercept")+
+    theme_minimal()
 ```
 
 If we had considered a fixed effect model, we would get a single variance $\sigma^2=6.882$, $\sigma^2=6.882$ obtained from `summary(multilev.NULL)$sigma` Considering a random effects model, we have $\sigma^2_u$ and $\sigma^2$, and the total variability of the data would be given by:
@@ -200,7 +201,7 @@ mean(pchisq(test,df=c(0,1),lower.tail=FALSE))
 fits <- MathAchieve %>% select(CSES, School)
 fits$fit <- fitted(ml3)
 ggplot(fits)+
-  geom_line(aes(CSES,fit, group=School, color=School))+ 
+  geom_line(aes(CSES,fit, group=School, color=School), size=1.2)+ 
   theme_minimal()+
   theme(legend.position="none")
 ```
@@ -224,17 +225,22 @@ ml4 = lme(MathAch~CSES*Sector,random = list(School=pdDiag(~CSES)),
 summary(ml4)
 ```
 
+All the fiexed effects in `ml4` are significant. 
+
+
 ```{r}
 ml4a <- update(ml4,method="ML")
 anova(ml4a)
 ```
 
 
+Private schools has higher average 2.79 and lower slope -1.34 than public schools. 
+
 ```{r}
 fits2 <- MathAchieve %>% select(CSES, School, Sector)
 fits2$fit <- fitted(ml4)
 ggplot(fits2)+
-  geom_line(aes(CSES,fit, group=School, color=Sector))+
+  geom_line(aes(CSES,fit, group=School, color=Sector), size=1.2)+
   theme_minimal()
 ```
 
