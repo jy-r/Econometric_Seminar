@@ -1,0 +1,166 @@
+---
+title: "Longitudinal data"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(nlme)
+require(lme4)
+require(gridExtra)
+```
+
+
+### Introduction 
+
+**Definition**: A longitudinal study refers to an investigation where participant outcomes and possibly treatments or exposures are collected at multiple follow-up times.
+
+Repeated measurements and longitudinal data can be viewed as multilevel models nested among individuals where for example with 2 levels, the lowest level (Level 1) are the repeated measurements nested within individuals (Level 2).
+
+**Data** Weight measuments of asian childern in the UK. Each childern was weighted 1-5 times. 
+
+| Variable    | Description         |
+|-------------|---------------------|
+| id          | identifier          |
+| age         | age of the child    |
+| weight      | weight of the child |
+| sex         | gender              |
+
+
+
+
+
+```{r}
+child <- read.table("dta/child.txt",header=TRUE)
+```
+
+
+
+
+
+```{r}
+ggplot(child, aes(age, weight, group=as.factor(id), color=as.factor(id)))+
+  geom_line()+
+  geom_point()+
+  theme_minimal()+
+  theme(legend.position="none")
+```
+
+Looking at the Figure, we can try to:
+  - Linear or quadratic trend
+  - Specific intercept for each child
+  - Specific straight line for each child
+
+
+
+### Model with random intercept
+
+
+$$\textit{weight}_{ij} = \beta_0 + \beta_1 \textit{age}_{ij} + \beta_2 \textit{age}^2_{ij} + u_j + \epsilon_ij$$
+
+
+```{r}
+(child.mod1 <- lme(weight~age+I(age^2),random=~1|id,data=child))
+```
+
+```{r}
+(child.mod1 <-lmer(weight~age+I(age^2)+(1|id),data=child))
+```
+
+We observed a greater variability among individuals than within individuals. A way to explain this is to allow for a difference bewteen the global trajectory and the trajectory for each child would be represented by a line, and the slope of that line varies from child to child.
+
+```{r}
+ggplot(child, aes(age, fitted(child.mod1), group=as.factor(id), color=as.factor(id)))+
+  geom_line()+
+  geom_point()+
+  theme_minimal()+
+  theme(legend.position="none")
+```
+
+
+### Model with random slopes
+
+$$\textit{weight}_{ij} = (\beta_0 + u_i) + (\beta_1 + v_i) + \textit{age}_{ij} + \beta_2 \textit{age}^2_{ij} + u_j + \epsilon_ij$$
+$$\textit{weight}_{ij} = \underbrace{\beta_0 + \beta_1 \textit{age}_{ij} + \beta_2 \textit{age}^2_{ij}}_{fixed} + \underbrace{u_j +v_i\textit{age}_{ij} + \epsilon_ij}_{random}$$
+
+
+
+
+```{r}
+(child.mod2<-lme(weight~age+I(age^2),random=~age|id,data=child))
+```
+
+We can see that the variability within individuals decreased, and there is a positive correlation. We can also test if both parameters are equal to zero or not:
+
+```{r}
+child.mod2a<-lme(weight~age+I(age^2),random = list(id=pdDiag(~age)),data=child)
+anova(child.mod2a, child.mod2)
+```
+
+The p-value shows that we do not reject the null hypothesis, i.e. correlation is zero. Now, we can contrast if the slopes must be different:
+
+```{r}
+test=-2*logLik(child.mod1, REML=TRUE)+2*logLik(child.mod2a,REML=TRUE)
+mean(pchisq(test,df=c(0,1),lower.tail=FALSE))
+```
+
+The Likelihood ratio test shows that we need a model with random slopes.
+
+
+
+```{r}
+ggplot(child, aes(age, fitted(child.mod2), group=as.factor(id), color=as.factor(id)))+
+  geom_line()+
+  geom_point()+
+  theme_minimal()+
+  theme(legend.position="none")
+#-----------------------------------
+child$fitm2 <- fitted(child.mod2)
+ggplot(child, aes(age, fitm2, group=as.factor(id), color=as.factor(id)))+
+  geom_line()+
+  geom_point()+
+  facet_wrap(~sex)+
+  theme_minimal()+
+  theme(legend.position="none")
+```
+
+
+$$\textit{weight}_{ij} = (\beta_0 + \beta_3 \textit{child}_i + u_i) + (\beta_1 +\beta_4 \textit{child}_i  + v_i) \textit{age}_{ij} + \beta_2 \textit{age}^2_{ij} + u_j + \epsilon_ij$$
+$$\textit{weight}_{ij} = \beta_0 +\textit{age}_{ij} + \beta_2 \textit{age}^2_{ij} + \beta_3 \textit{sexgirl}_i + \beta_4(\textit{age}_{ij}:\textit{child}_i) + u_j + v_j\textit{age}_{ij} + \epsilon_ij$$
+
+```{r}
+child.mod3<-lme(weight~age*sex+I(age^2),random=list(id=pdDiag(~age)),
+                data=child)
+summary(child.mod3)$tTable
+```
+
+The variable sex is significant but the interaction not.
+
+On average boys are heavier than girls but average rate of linear growth does not differ. 
+
+In the previous model, we included the `sex` effect in the average growth, but we assumed that the variability of the specific deviations of each child were the same between boys and girls. To check if that assumption is reasonable, we introduce the sex variable as a random effect to allow the individuals lines to be different from the average for each child sex, i.e.:
+
+$$\textit{weight}_{ij} = (\beta_0 + \beta_3 \textit{sexgirl}_{ij} + u_i : \textit{sex}_i) + (\beta_1 +\beta_4 \textit{sexgirl}_i  + v_i:\textit{sexgirl}_i) \textit{age}_{ij} + \beta_2 \textit{age}^2_{ij} + u_j + \epsilon_ij$$
+
+
+```{r}
+child.mod4<-lme(weight~age*sex+I(age^2),
+                random=list(id=pdDiag(~sex-1),id=pdDiag(~sex:age-1)),
+                data=child)
+print(child.mod4)
+```
+
+
+```{r}
+summary(child.mod4)$tTable
+```
+
+
+
+
+This example was based on lecture by [Dae-Jin Lee](http://idaejin.github.io/bcam-courses/neiker-2016/material/mixed-models/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
