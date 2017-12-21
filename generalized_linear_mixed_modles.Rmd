@@ -1,0 +1,76 @@
+---
+title: "Non-gaussian responses: generalized linear mixed models"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(nlme)
+require(lme4)
+require(gridExtra)
+require(VGAM)
+```
+
+### Introduction 
+
+
+| Variable | Description                                                                                                                |
+|----------|----------------------------------------------------------------------------------------------------------------------------|
+| comm     |  Community identifier                                                                                                      |
+| wonid    |  Woman identifier                                                                                                          |
+| antemed  | Received antenatal care at least once from a medically-trained provider,   e.g. doctor, nurse or midwife (1 = yes, 0 = no) |
+| bord     | Birth order of child (ranges from 1 to 13)                                                                                 |
+| mage     | Mother’s age at the child’s birth (in years)                                                                               |
+| urban    | Type of region of residence at survey (1=urban, 0=rural)                                                                   |
+| meduc    | Mother’s level of education at survey (1=none, 2=primary, 3=secondary or   higher)                                         |
+| slam     |  Mother’s religion (1=Islam, 0=other)                                                                                      |
+| wealth   | Household wealth index in quintiles (1=poorest to 5=richest)                                                               |
+
+
+```{r}
+BDHS <- read.table("dta/BDHS.txt", header = TRUE)
+```
+
+
+```{r}
+fit <- glmer(antemed ~ (1 | comm), family = binomial("logit"), data = BDHS)
+```
+
+
+```{r}
+summary(fit)
+```
+
+
+
+```{r}
+fit0 <- glm(antemed ~ 1, family=binomial("logit"),data=BDHS)
+test = -2*logLik(fit0) + 2*logLik(fit)
+mean(pchisq(test,df=c(0,1),lower.tail=FALSE))
+```
+
+
+```{r}
+library(lattice)
+qqmath(ranef(fit, condVar=TRUE),strip=FALSE)$comm
+```
+
+
+```{r}
+BDHS$magec <- BDHS$mage - mean(BDHS$mage)
+fit2 <- glmer(antemed~magec+(1|comm),family=binomial("logit"),data=BDHS)
+summary(fit2)
+```
+
+
+```{r}
+predprob <- fitted(fit2)
+```
+
+
+This example was based on lecture by [Dae-Jin Lee](http://idaejin.github.io/bcam-courses/neiker-2016/material/mixed-models/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
