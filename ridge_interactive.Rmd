@@ -1,0 +1,148 @@
+---
+title: "Ridge & Lasso Regression"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+require(shiny)
+
+source("install_packages.r")
+require(knitr)
+require(plotly)
+require(ggplot2)
+require(ISLR)
+require(glmnet)
+```
+
+
+
+
+
+
+
+
+Column {.sidebar data-width=450}
+-----------------------------------------------------------------------
+
+```{r .sidebar}
+
+  variables <- 1:6
+  names(variables) <- c("x","x2","x3","x4","x5","1/x")
+
+
+wellPanel(
+  
+  sliderInput("lambda","Lambda", min=(0),max= (50), step=0.0001, value=0),
+  sliderInput("alpha","Alpha", min=0,max=1, value=0),
+  hr(),
+  sliderInput("n","Number of observations", min=(1),max= (500), value=100),
+  sliderInput("size","Size of train sample", min=(1),max= (100), value=80),
+  hr(),
+  checkboxGroupInput("variables","Select variables for model",choices = variables, selected = c(1,2,3,4)),
+  hr(),
+  h2("Coefficients to generate data"),
+  sliderInput("beta","Intercept", min=(-20),max= (20),step=0.0001, value=0),
+  sliderInput("x","Coeficient x", min=(-20),max= (20),step=0.0001, value=11),
+  sliderInput("x2","Coeficient x^2", min=(-20),max= (20),step=0.0001, value=-19),
+  sliderInput("x3","Coeficient x^3", min=(-20),max= (20),step=0.0001, value=1),
+  sliderInput("x4","Coeficient x^4", min=(-20),max= (20),step=0.0001, value=1),
+  sliderInput("x5","Coeficient x^5", min=(-20),max= (20),step=0.0001, value=0),
+  sliderInput("x6","Coeficient 1/x", min=(-20),max= (20),step=0.0001, value=0),
+  hr(),
+  sliderInput("seed","Set seed", min=(1),max= (1000),value=1)
+
+)
+
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+
+```{r}
+dta <- function(){
+  set.seed(input$seed)
+x <- runif(input$n,-4,4)
+x <- x[order(x)]
+set <- x
+e <- rnorm(input$n,0,20)
+#e <- rep(0, input$n)
+dtagen <- data.frame(e=e, x = x, x2 = x^2, x3 = x^3, x4 = x^4, x5 = x^5,  x6 = 1/x)
+dtagen$y <- input$beta +
+  input$x * dtagen$x +
+  input$x2 * dtagen$x2 +
+  input$x3 * dtagen$x3 +
+  input$x4 * dtagen$x4 +
+  input$x5 * dtagen$x5 +
+  input$x6 * dtagen$x6 +
+  dtagen$e
+dtagen <- dtagen[,-1]
+dtagen <- dtagen[,c(as.numeric(input$variables),7)]
+x <-  model.matrix(y~.,data=dtagen)
+y <- dtagen$y
+
+
+return(list(x=x, y=y,dtagen=dtagen, set=set))
+}
+#plot(y~x, data=dtagen)
+```
+
+### Ridge regression
+
+```{r}
+renderPlot({
+set.seed(1)
+dtagen <- dta()$dtagen
+x = dta()$x
+x3 = x
+y = dta()$y
+
+print(colnames(x))
+print(input$variables)
+sam <- sample(1:nrow(dtagen),nrow(dtagen)/100*input$size)
+x = x[sam,]
+y = y[sam]
+
+
+
+ridge.mod <- glmnet(x, y ,alpha=input$alpha, lambda=input$lambda, family="gaussian")
+fity <- predict(ridge.mod, s=input$lambda, newx = x3, type="response")
+
+dtagen$train <- 0
+dtagen$train[sam] <- 1
+
+dtagen$fity <- fity
+dtagen$fit <- predict(lm(y~.,dtagen[sam,]),newdata=dtagen)
+#dtagen$fit <- dtagen$fit[order(dtagen$fit)]
+
+#   input$x2 * dtagen$x2 +
+#   input$x3 * dtagen$x3 +
+#   input$x4 * dtagen$x4 +
+#   input$x5 * dtagen$x5 +
+#   input$x6 * dtagen$x6 +
+#   input$x7 * dtagen$x7
+
+set <- dta()$set
+
+
+ggplot(dtagen)+
+  geom_point(aes(x,y, colour=as.factor(train)))+
+  geom_line(aes(x,fity))+
+  geom_line(aes(x,fit,color="OLS"))
+
+ # geom_line(aes(x, actual, colour="Actual"))+
+})
+```
+
+```{r}
+reactive({print(input$variables)})
+```
+
+
+
