@@ -20,9 +20,9 @@ require(glmmML)
 
 ### Introduction 
 
-Source Zuur et al. (2009) et al. (page 326)
+Data from Zurr - Mixed Effects Models and Extensions in Ecology with R
 
-Relationship between the presence and absence of larvae in deer and the explanatory variables `length` and  `sex` of the deer and the `Farm`.
+Relationship between the presence and absence of larvae (Elaphostrongylus cervi) in deer across Spain and the explanatory variables `length` and  `sex` of the deer and the `Farm`.
 
 $$ y_{ij} \sim Bin(1, p_{ij})$$
 $$\textit{logit}(p_{ij}) = \beta_0 + \beta_1 \textit{Length}_{ij} + u_i, \quad u_i \sim N(0, \sigma_u^2)$$
