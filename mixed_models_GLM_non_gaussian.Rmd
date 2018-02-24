@@ -1,0 +1,85 @@
+---
+title: "Non-gaussian responses: generalized linear mixed models"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(nlme)
+require(lme4)
+require(gridExtra)
+require(VGAM)
+require(MASS)
+require(glmmML)
+```
+
+### Introduction 
+
+Source Zuur et al. (2009) et al. (page 326)
+
+Relationship between the presence and absence of larvae in deer and the explanatory variables `length` and  `sex` of the deer and the `Farm`.
+
+$$ y_{ij} \sim Bin(1, p_{ij})$$
+$$\textit{logit}(p_{ij}) = \beta_0 + \beta_1 \textit{Length}_{ij} + u_i, \quad u_i \sim N(0, \sigma_u^2)$$
+where $y_{ij}$ is 1 if deer $j$ from Famr $i$ is infected. 
+
+
+```{r}
+deer <- read.table('dta/deer.txt',header=TRUE)
+deer$Farm <- factor(deer$Farm)
+```
+
+
+```{r}
+ggplot(deer) + geom_point(aes(Length, as.factor(infect)),size=4, alpha=1/10)
+ggplot(deer) + geom_boxplot(aes(as.factor(infect), Length))
+ggplot(deer) + geom_density(aes(Length, group=as.factor(infect), fill= as.factor(infect)),alpha=1/5)+
+   theme_bw()
+```
+
+
+```{r}
+deer.glm <- glm(infect~Length+Farm,data=deer,family=binomial)
+deer.glmm <- glmer(infect~Length+(1|Farm),data=deer,family=binomial)
+deer.glmm2 <- update(deer.glmm,.~.-Length,data=deer)
+```
+
+Comparison of the two models 
+```{r}
+anova(deer.glmm2,deer.glmm)
+```
+
+
+
+```{r, warning=FALSE}
+deer.glm3 <- glm(infect~Length,data=deer,family=binomial)
+ggplot(deer) + geom_point(aes(Length, infect, color=Farm),size=4, alpha=9/10) + 
+  geom_smooth(aes(Length,fitted(deer.glmm), method="loess", 
+                  group=Farm,
+                  color=Farm))+
+  geom_smooth(aes(Length,fitted(deer.glm3)), size=2, color="black", method="lm", formula = y~poly(x,4), se=FALSE)+
+  theme_bw()
+```
+
+
+Using `glmmPQL` and `glmmML`, note that the results may differ as the estimation procedure is different.
+
+```{r}
+deer2 <- glmmPQL(infect ~ Length, random=~1|Farm,family=binomial("logit"),
+                 data=deer)
+summary(deer2)
+
+deer3 <- glmmML(infect ~ Length, cluster=Farm,family=binomial("logit"),
+                data=deer)
+summary(deer3)
+```
+
+
+
+
+This example was based on lecture by [Dae-Jin Lee](http://idaejin.github.io/bcam-courses/neiker-2016/material/mixed-models/) and slightly modified. [cc](https://creativecommons.org/licenses/by-sa/3.0/)
