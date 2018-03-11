@@ -1,0 +1,210 @@
+---
+title: "Choropleths"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(1)
+require(knitr)
+require(dplyr)
+require(plotly)
+require(ggplot2)
+require(gridExtra)
+library(rgeos) 
+library(rgdal)
+require("SmarterPoland")
+require("reshape") 
+require(RColorBrewer)
+```
+
+## Advanced R mapping: Choropleths / infomaps 
+   ... using ggplot and macroeconomic data
+
+
+  
+   Choropleth for 
+   GDP per capita in % of EU average
+   Austria, Czech Republic, Germany, Hungary, Poland, Slovakia
+
+
+```{r}
+# Skip this section, if geo-data are already downloaded
+download.file("http://ec.europa.eu/eurostat/cache/GISCO/geodatafiles/NUTS_2010_60M_SH.zip", 
+              destfile = "NUTS_2010_60M_SH.zip")
+# unzip to SpatialPolygonsDataFrame
+unzip("NUTS_2010_60M_SH.zip")
+```
+ 
+## Step 1 - Preparation of "mappning data"
+
+```{r}
+map <- readOGR(dsn = "./NUTS_2010_60M_SH/data", layer = "NUTS_RG_60M_2010")
+# Retrieve Austria, Czech Republic, Germany, Hungary, Poland, Slovakia
+# polygon data at all NUTS levels.
+# Now, we create a SpatialPolygonsDataFrame object for the selected countries
+# STAT_LEVL_ is NUTS2 regions only, we only need level 2
+map$NUTS_ID[1:4] #first two letters are country code, substr(x, start, stop)
+CE_map <- map[substr(map$NUTS_ID,1,2) %in% c("AT","CZ","DE","HU","PL","SK") & map$STAT_LEVL_ == 2,]
+CE_map.borders <- map[substr(map$NUTS_ID,1,2) %in% c("AT","CZ","DE","HU","PL","SK") & map$STAT_LEVL_ == 0,]
+```
+
+## Step 2 - Download & preparation of the macroeconomic data
+
+ ... GDP Per Capita in EUR, percentage of EU average
+ ... data source: Eurostat (consistent NUTS-based observations)
+ 
+ 
+ 
+```{r}
+require("SmarterPoland") # install.packages("SmarterPoland")
+require("reshape")
+# Download different GDP indicators from the "nama_10_gdp" dataset
+GDP <- getEurostatRCV(kod = "nama_10r_2gdp")
+# For the "GDP.PC" dataframe, we only use EUR_HAB_EU	
+# .. Euro per inhabitant in percentage of the EU average
+GDP.PC <- GDP[GDP$unit == "EUR_HAB_EU",]
+# ?cast
+GDP.PC <- cast(GDP.PC, geo ~ time, value="value")
+head(GDP.PC) # the data frame is organized so that 
+#              it can be merged with the geodata. 
+#              GDP.PC contains data for EU all countries at NUTS2
+#              .. at this point, we do not filter for the 6 countries as in Step 1
+```
+
+## Step 3 - Merging spatial and macroeconomic data  
+
+```{r}
+require(broom)
+colnames(GDP.PC) <- paste0("x",colnames(GDP.PC)) #its easier to work with column name "x2015" then with "2015", numeric column names can cause problems 
+CE_map1 <- tidy(CE_map, "NUTS_ID") #will clean and transform spatialpolygondataframe to dataframe 
+#each polygon is now set of points with latitude, logitude and with order in wich it should be drawn
+#for example plot(CE_map1$long, CE_map1$lat)
+CE_map1 <- merge(CE_map1, GDP.PC, by.x="id",by.y="xgeo")
+#To ensure correct plotting of "hole" NUTS2 regions, we have to
+# prepare a top layer to the plot. Relevant for: Bremen, Berlin, Praha, Wien.
+CE_map.holes <- CE_map1[CE_map1$id %in% c("DE30","DE50","CZ01","AT13"),]
+#tidy polylines for borders
+CE_map2 <- tidy(CE_map.borders)
+```
+
+## Step 4 Plotting (GDP data for the year 2015)
+
+```{r}
+ggplot(data=CE_map1, aes(long, lat, group=group)) + 
+  geom_polygon(aes(fill=x2015),color="grey50")+
+  # Next line is the top layer for "hole" regions
+  # .. if you comment-out, some "hole" regions may not display properly
+  geom_polygon(data=CE_map.holes, aes(fill=x2015),color="grey50")+
+  scale_fill_gradientn('% of EU \n average',
+                       colours=brewer.pal(8, "Blues")) +
+  geom_path(data=CE_map2) +
+  coord_map()+
+  #coord_map(project = "orthographic", xlim = c(-22, 34), ylim = c(35, 70))+
+  ggtitle("GDP per capita, EUR, in % of EU average, year 2015") +
+  theme_minimal()
+```
+
+
+## Step 5 - Combined choropleths (GDP data for the years 2005 & 2015) 
+
+```{r}
+# ggplot usualy prefers data in long format
+# its easier to split/group graphs by variables, when they are stored as factors in one column
+CE_map.long <- melt(data = CE_map1, id.vars = c("id", "long", "lat", "group"), 
+                 measure.vars = c("x2005", "x2015"))
+# 
+levels(CE_map.long$variable) <- c("2005","2015")
+#
+CE_map.long.holes <- CE_map.long[CE_map.long$id %in% c("DE30","DE50","CZ01","AT13"),]
+CE_map2 <- tidy(CE_map.borders)
+```
+
+
+
+
+```{r}
+(gmap <- ggplot(data=CE_map.long, aes(long, lat, group=group)) + 
+  geom_polygon(aes(fill=value),color="grey50")+
+  # Next line is the top layer for "hole" regions
+  # .. if you comment-out, some "hole" regions may not display properly
+  geom_polygon(data=CE_map.long.holes, aes(fill=value),color="grey50")+
+  scale_fill_gradientn('% of EU \n average',
+                       colours=brewer.pal(8, "Blues"))+
+  geom_path(data=CE_map2)+
+  coord_map()+ggtitle("GDP per capita, EUR, in % of EU average, year 2015") +
+  theme_minimal()+
+  facet_grid(~variable)) # vertically aligned 
+```
+
+
+```{r}
+gmap + facet_grid(variable~.)
+```
+
+
+## Step 6 Animated choropleths
+
+```{r}
+# where <- choose.dir("Select folder to save frames (png)?")
+# dir.create(file.path(where,"img_gif"))
+# 
+# apply(CE_map1, 2, min) #finding the limits for pallete
+# apply(CE_map1, 2, max)
+# 
+# sc <- scale_fill_gradientn('% of EU \n average',
+#                        colours=brewer.pal(9, "Blues"), limits=c(15,240))
+# 
+# for(year in colnames(GDP.PC)[2:ncol(GDP.PC)]){
+# png(file.path(where,paste0("img_gif/",year,".png")))
+# print(ggplot(data=CE_map1, aes(long, lat, group=group)) + 
+#   geom_polygon(aes_string(fill=year),color="grey50")+
+#   # Next line is the top layer for "hole" regions
+#   # .. if you comment-out, some "hole" regions may not display properly
+#   geom_polygon(data=CE_map.holes, aes_string(fill=year),color="grey50")+
+#   sc+
+#   geom_path(data=CE_map2)+
+#   coord_map()+ggtitle(paste("GDP per capita, EUR, in % of EU average, year",substr(year,2,5))) +
+#   theme_minimal())
+# dev.off()
+# }
+
+#http://gifmaker.org/
+```
+
+
+## Assigment 
+
+
+```{r}
+toc <- getEurostatTOC()
+#View(toc)
+dta <- getEurostatRCV(kod = "ei_lmhr_m")
+dta <- dta[dta$unit=="PC_ACT" &
+             dta$s_adj == "SA" &
+              dta$indic == "LM-UN-T-TOT" & 
+               dta$geo %in% c("CZ","SK","DE","PL") &
+             dta$time == "2017M01", c("geo","value")]
+require(dplyr)
+dta <- getEurostatRCV(kod = "ei_lmhr_m") %>% filter(unit=="PC_ACT", 
+                      s_adj=="SA", 
+                      indic=="LM-UN-T-TOT", 
+                      geo %in% c("CZ","SK","DE","PL", "AT","HU"),
+                       time == "2018M01") %>% select(geo, value)
+
+CE_map <- map[substr(map$NUTS_ID,1,2) %in% c("CZ","SK","DE","PL", "AT","HU") & map$STAT_LEVL_ == 0,]
+
+CE_map1 <- tidy(CE_map, "NUTS_ID") 
+
+CE_map1 <- merge(CE_map1, dta, by.x="id",by.y="geo")
+
+
+ggplot(data=CE_map1, aes(long, lat, group=group)) + 
+  geom_polygon(aes(fill=value),color="grey50")+
+  scale_fill_gradientn('% of EU \n average',
+                       colours=brewer.pal(8, "Blues")) +
+  coord_map()+
+  theme_minimal()
+```
+
