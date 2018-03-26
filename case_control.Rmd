@@ -1,0 +1,160 @@
+---
+title: "Case control"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(GGally)
+```
+
+## Case-control sampling and logistic regression ####
+
+
+Often, in binary dependent variables, "success" cases are rare and we take them all into our sample.
+
+Rare diseases vs. population, e-shop purchase vs. visits 
+
+All "successful" cases plus approx. 5-times that number of controls is usually sufficient for Logit
+ provided random selection
+
+
+## Example: Myocardial infarction (MI) in South Africa
+
+The variables are
+
+|   variable         | description                      |
+|-----------------|-----------------------------------------------|
+|   sbp           | systolic blood pressure;                      |
+|     tobacco     |      cumulative tobacco (kg);                 |
+|     ldl         |  low densiity lipoprotein   cholesterol;      |
+|     adiposity   |  a measure of fat;                            |
+|     famhist     |   family history of heart disease   (Present  |
+|     obesity     |    BMI                                        |
+|     alcohol     |    current alcohol consumption;               |
+|     age         |      age at onset;                            |
+|     chd         |        response  coronary heart disease (MI). |
+
+```{r}
+rm(list=ls())
+heart <- read.csv("dta/SouthAfrica.csv")
+```
+
+Sample of adult males in a heart-disease high-risk region of the Western Cape, South Africa, approx. 1980.
+
+There are roughly two controls per case of CHD.
+
+The prevalence rate of MI is 5.1 % in the region.
+
+
+```{r}
+head(heart, 10)
+summary(heart)
+summary(as.factor(heart$chd)) 
+plot(heart[ , 1:8], cex=0.8, pch=16, col=as.factor(heart$chd))
+```
+
+```{r, warning=FALSE, message=FALSE}
+ggpairs(data=cbind(heart[,c("age","tobacco","alcohol","obesity","famhist")],chd=as.factor(heart$chd)), 
+        aes(colour = chd), 
+        upper = list(continuous = "density", combo="box"))
+```
+
+```{r}
+ggplot(data=heart)+
+  geom_boxplot(aes(as.factor(chd),obesity))+
+  facet_wrap(~cut(heart$age,7))
+```
+
+
+Our goal is to identify relative strengths and directions of risk factors.
+
+## Logistic regression
+
+```{r}
+heartfit <- glm(chd~., data = heart , family = binomial)
+summary(heartfit)
+```
+
+With case-control samples, we can estimate the regression
+parameters beta(j) accurately - if our model is correct.
+
+The constant term beta(0) is biased.
+.. but may be corrected relatively easily
+
+```{r}
+heart.coeffs <- heartfit$coefficients
+heart.coeffs
+```
+
+```{r}
+pi.pop <- 0.051 # percentage in population
+pi.smpl <- 160/462 # percentage in sample
+```
+
+case control adjustment formula for the (Intercept)
+
+$$\hat{\beta}_0^\ast = \hat{\beta}_0 + \log\frac{\pi}{1-\pi}-\log\frac{\tilde{\pi}}{1-\tilde{\pi}}$$
+
+```{r}
+(beta.0.pop <- heart.coeffs[1] + log(pi.pop/(1-pi.pop)) - log(pi.smpl/(1-pi.smpl)))
+```
+
+
+```{r}
+heart.coeffs[1] <- beta.0.pop
+heart.coeffs
+length(heart.coeffs) # Intercept + 8 variables
+```
+
+
+Lets calculate MI probability for an "average" SA male with family history of MI
+and for "the same" male without family history of MI
+
+
+```{r}
+attach(heart)
+heart2 <- rbind(heart, list(mean(sbp), mean(tobacco), mean(ldl), mean(adiposity), "Present", mean(obesity),
+                 mean(alcohol), mean(age), NA))
+heart2 <- rbind(heart2, list(mean(sbp), mean(tobacco), mean(ldl), mean(adiposity), "Absent", mean(obesity),
+                            mean(alcohol), mean(age), NA))
+tail(heart2)
+```
+
+
+
+Biased predictions, based on the sample "success" prevalence (beta 0 is biased)
+
+```{r}
+predict(heartfit, newdata=heart2[463:464, ], type="response")
+```
+
+## Case-control corrected predictions
+
+```{r}
+heart3 <- heart2 # We prepare yet another dataframe - for illustration and comparison
+heart3$famhist <- 0  # with dummy variables, because we cannot multiply
+heart3$famhist[heart2$famhist == "Present"] <- 1 # dummy variable instead of factor
+(Log.Odds1 <- heart.coeffs[1] + sum(heart3[463, 1:8]*heart.coeffs[2:9]))
+(Log.Odds2 <- heart.coeffs[1] + sum(heart3[464, 1:8]*heart.coeffs[2:9]))
+```
+
+Expected probability of MI:
+
+```{r}
+Average.with.famhistory.Yes <- exp(Log.Odds1)/(1+exp(Log.Odds1))
+Average.with.famhistory.No <- exp(Log.Odds2)/(1+exp(Log.Odds2))
+names(Average.with.famhistory.Yes) <- "Expected MI probability: average male WITH family history of MI"
+names(Average.with.famhistory.No) <- "Expected MI probability: average male WITHOUT family history of MI"
+```
+
+```{r}
+Average.with.famhistory.Yes
+Average.with.famhistory.No
+```
+

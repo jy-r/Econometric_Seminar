@@ -1,0 +1,261 @@
+---
+title: "Missing data & Multiple Imputation (MI)"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(GGally)
+require(lmtest)
+```
+
+
+## Example description
+
+LRM:    $\textit{lwage} \sim \textit{(Intercept)} + \textit{educ} + \textit{tenure} + \textit{female} + \textit{south}$
+
+A) Data:
+
+    1) From "wage1.csv", we only retrieve a small data sample, n=50
+       for further estimation
+
+    2) In our n=50 sample, we simulate 6 and 4 wage observations in 2 regressors
+        (10 missing values total).
+
+B) Estimation & model comparison
+
+    1) We estimate the benchmark LRM using "full" dataset of n=50
+    2) We estimate the LRM using complete cases only (listwise deletion)
+    3) We estimate the LRM using mean substitution
+    4) Example of multiple imputation in R is provided
+
+
+## A.1
+
+```{r}
+wageData <- read.csv("dta/wage1.csv")
+```
+
+
+
+```{r}
+set.seed(300)
+sample1 <- sample(nrow(wageData), size = 50, replace = F)
+full <- wageData[sample1, ] 
+```
+
+This is the `n=50` sample for benchmark estimation
+rownames in "full" dataframe correspond to randomly selected rows from "wageData"
+
+```{r}
+row.names(full) <- c(1:50) # fixes row names.
+```
+
+## A.2 Simulate wage missing data for two variables: educ and tenure
+
+
+
+```{r}
+set.seed(119)
+sample2 <- sample(nrow(full), size = 20, replace = F) #original missing 4
+sample3 <- sample(nrow(full), size = 20, replace = F) #original missing 6
+wage <- full # step 1, copy all data
+wage[sample2, "educ"] <-  NA  # step 2, generate NAs
+wage[sample3, "tenure"] <-  NA
+sum(complete.cases(wage)) # complete cases in the wage dataset
+#fix(wage)
+```
+
+Due to missing data, we have lost a total of n = `r 50-(sum(complete.cases(wage)))` observations.
+
+## B.1 Our benchmark model - with no missing data simulated (all n=50 observations used)
+
+```{r}
+LRM.bench <- lm(lwage~educ+tenure+female+south, data = full)
+summary(LRM.bench)
+```
+
+
+## B.2 LRM on observations with missing data 
+
+estimated on complete.cases only  rows with NA entries are excluded automatically
+and compare coeffs and significances with "LRM.bench"
+
+```{r}
+LRM.cc <- lm(lwage~educ+tenure+female+south, data = wage)
+summary(LRM.cc) 
+```
+
+## B.3 LRM on observations with missing data - mean substitution used
+
+Mean substitution split to two steps for clarity, the following mean substitution routine can be performed more efficiently....
+
+```{r}
+wage.ms <- wage # We shall use a new data.frame to make the mean substitution
+educ.mean <- mean(wage.ms$educ, na.rm=T )     # Calculate the means
+tenure.mean <- mean(wage.ms$tenure, na.rm=T ) #
+wage.ms[is.na(wage.ms$educ), "educ"] <- educ.mean         # Mean substitutions
+wage.ms[is.na(wage.ms$tenure), "tenure"] <- tenure.mean     #
+```
+
+
+```{r}
+LRM.ms <- lm(lwage~educ+tenure+female+south, data = wage.ms)
+summary(LRM.ms)
+```
+
+Compare the three models: coefficients and VIFs
+
+```{r}
+require(lmtest)
+coeftest(LRM.bench) # benchmark
+coeftest(LRM.cc)    # missing data -> negative impact on statistical significance
+coeftest(LRM.ms)    # Mean subistitution -> falsely "improved" results as compared to benchmark
+```
+
+
+```{r, echo=FALSE}
+kable(data.frame(LRM.bench = coeftest(LRM.bench)[,1],
+                pval = coeftest(LRM.bench)[,4],
+                 LRM.cc = coeftest(LRM.cc)[,1],
+                pval = coeftest(LRM.cc)[,4],
+                 LRM.ms = coeftest(LRM.ms)[,1],
+                pval = coeftest(LRM.ms)[,4]), 
+      digits=3)
+```
+
+## B.4 Multiple imputation example - using the {mice} package
+tested on version 2.25 of `mice`
+
+```{r}
+wage.mice <- wage[ , c(22,2,3,4,6,11)]
+head(wage.mice,15)
+```
+
+
+We shall use a new data.frame for multiple imputation MI uses ML estimation and does NOT work if dataframe contains linearly dependent variables and/or combinations such as var1 & log(var1)..
+
+Estimation using the `mice` package
+
+
+```{r}
+require("mice") # install.packages("mice")
+#help(package=mice)
+```
+
+Create the imputation object
+
+```{r}
+#?mice
+imputed.data <- mice(wage.mice, seed=200)
+```
+
+Imputation summary
+
+see page 16 of the `mice` PDF file for "pmm" and other methods
+pmm - Predictive mean matching
+
+```{r}
+imputed.data 
+```
+
+Actual imputed values for each of the 5 imputations
+
+```{r}
+imputed.data$imp$educ
+imputed.data$imp$tenure
+```
+
+Estimation of a model using MI:
+
+```{r}
+#?with
+LRM.mice <- with(imputed.data, lm(lwage~educ+tenure+female+south))
+```
+
+Estimation output
+
+```{r}
+LRM.mice
+#?pool
+pool(LRM.mice)
+(LRM.MI <- summary(pool(LRM.mice)))
+```
+
+fmi 
+
+  - fraction of missing information as defined in Rubin (1987)
+  - Rubin (1987). Multiple Imputation for Nonresponse in Surveys.
+  - John Wiley & Sons, New York.
+      
+lambda 
+
+  - proportion of the total variance that is attributable to the missing data.
+    
+```{r, echo=FALSE}
+kable(data.frame(LRM.bench = coeftest(LRM.bench)[,1],
+                 LRM.cc = coeftest(LRM.cc)[,1],
+                 LRM.ms = coeftest(LRM.ms)[,1],
+                LRM.MI = LRM.MI[,1]),
+      digits=3)
+```
+
+
+
+```{r}
+## Cross Validation
+cv.wage <- wageData[-sample1,]
+cv.wage <- cv.wage[1:200,]
+
+LRM.MI.prediction <- LRM.MI[1,1]+
+  LRM.MI[2,1]*cv.wage$educ+
+  LRM.MI[3,1]*cv.wage$tenure+
+  LRM.MI[4,1]*cv.wage$female+
+  LRM.MI[5,1]*cv.wage$south
+
+mean((cv.wage$lwage-predict(LRM.bench, cv.wage))^2)
+mean((cv.wage$lwage-predict(LRM.cc, cv.wage))^2)
+mean((cv.wage$lwage-predict(LRM.ms, cv.wage))^2)
+mean((cv.wage$lwage-LRM.MI.prediction)^2)
+```
+
+
+
+
+
+
+## Assignment 1
+
+1) Open the "hp2_mi.csv" dataset.
+   This dataset contains an amended HPRICE2 dataset (as used in Wooldridge)
+   dataset is shorter and contains missing data (wage)
+
+2) Use OLS to estimate the equation (complete cases only):
+
+   $\textit{log(price)} <- \textit{(Intercept)} + \textit{log(nox)} + \textit{dist} + \textit{rooms} + \textit{stratio}$
+
+where:
+   
+|            variable      |       description                      |
+|--------------------------|----------------------------------------|
+|            price         |       housing price, $                 |
+|              nox         |  nitrox. concentr. in parts per   100m |
+|              rooms       |    number of rooms                     |
+|              dist        |      wght dist to 5 employ centers     |
+|              stratio     |  average student-teacher ratio         |
+
+   all observations are provided as average values for different districts/areas
+
+3) Using `nrow()` and `sum(complete.cases())` functions, find out the
+   proportion of rows with missing data in the dataset.
+
+4) Perform MI, estimation and evaluation of the model based on MI
+   hint: replicate the steps on lines 91-107
+   Use `seed=200` argument for the `mice()` function
+
+
