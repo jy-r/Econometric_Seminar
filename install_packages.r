@@ -22,7 +22,9 @@ required_packages <- c("ggplot2",
                        "rgeos",
                        "rgdal",
                        "RColorBrewer",
-                       "mice")
+                       "mice",
+                       "bife",
+                       "survival")
 missing_packages <-
   required_packages[!(required_packages %in% installed.packages()[, "Package"])]
 if (length(missing_packages) > 0) {

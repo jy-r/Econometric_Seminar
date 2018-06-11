@@ -1,0 +1,183 @@
+---
+title: "Binary Choice Models with Fixed Effects"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+source("install_packages.r")
+require(knitr)
+require(ggplot2)
+require(dplyr)
+require(bife)
+```
+
+
+### Introduction 
+
+In econometrics, fixed effects binary choice models are important tools for panel data analysis. The package `bife` provides a new approach suggested by Stammann, Heiss, and McFadden (2016) to estimate logit and probit panel data models of the following form:
+
+$$y_{it}=1[\mathbf{x}_{it}\mathbf{\beta}+\alpha_i+\epsilon_{it}>0],$$
+
+where $i=1,…,N$ and $t=1,…,T_i$ denote different indices. In many applications, $i$ represents individuals, firms or other cross-sectional units and $t$ represents time in a longitudinal data set. But the setup is also useful for instance if $i$ represents ZIP code areas and $t$ is an index of individuals. The dependent variable $y_{it}$ is binary. We observe regressors collected in the vector $\mathbf{x}_it$ but we don’t observe the error term $\epsilon_it$.
+
+We are primarily interested in estimating the parameters $\mathbf{\beta}$, but the model also includes individual fixed effects $\alpha_i$. We assume $E(\epsilon_{it}|\mathbf{X}_i,\alpha_i)=0$ but don’t make any assumptions about the marginal distribution of $\alpha_i$ or its correlation with the regressors $\mathbf{x}_{i1},\dots,\mathbf{x}_{iTi}$.
+
+The estimator implemented in this package is based on maximum likelihood estimation (ML) of both $\mathbf{\beta}$ and $\alpha_1,\dots,\alpha_N$. It actually is the same estimator as a logistic regression a set of individual dummy variables such as
+
+```{r, eval=FALSE}
+glm(y ~ X + factor(i), family = binomial())
+```
+
+The main difference is that In contrast to `glm()`, `bife()` applies a pseudo-demeaning algorithm proposed by Stammann, Heiss, and McFadden (2016). Its computational costs are lower by orders of magnitude if $N$ is reasonably large.
+
+It is well known that as $N\rightarrow \infty$, the ML estimator is not consistent. This “incidental parameters problem” can be severe if $T$ is small. To tackle this problem, we provide an analytical and a jackknife bias correction for the structural parameters $\mathbf{\beta}$ and the average partial effects (Hahn and Newey 2004). Thus this package is well suited to analyse big micro-data where $N$ and/or $T$ are large.
+
+This package provides methods to:
+
+  - `bife()` – estimate binary choice models with fixed effects with/-out bias correction
+  - `apeff_bife()` – compute average partial effects2 with/-out bias correction
+
+Both methods utilize the `RcppArmadillo` package provided by Eddelbuettel and Sanderson (2014).
+
+An alternative to full ML estimation of all parameters is a conditional maximum likelihood estimator which conditions out $\alpha_1,\dots,\alpha_N$ and only estimates $\mathbf{\beta}$. It is for example available with `survival::clogit()` and is consistent under the usual regularity conditions. The problem with this estimator is that its computational burden increases dramatically for larger $T$ values and that partial effects cannot be consistently estimated since this would require estimates of $\alpha_1,\dots,\alpha_N$ .
+
+
+
+
+
+### Example: Hyslop (1999) — Large N
+
+```{r}
+dta <- bife::psid
+```
+
+The first example is inspired by Hyslop (1999) who analysed the labor force participation of married women in a “classic” balanced panel. The sample was obtained from the “Panel Study of Income Dynamics” and contains information about $N=$ `r nrow(dta)/length(unique(dta$TIME))` women that were observed over $T=$ `r length(unique(dta$TIME))` years.
+
+| Variable | Description                |
+|----------|----------------------------|
+| ID       | individual identifier      |
+| LFP      | labor force participation  |
+| KID1     | # of kids 0-2              |
+| KID2     | # of kids 3-5              |
+| KID3     | # of kids 6-17             |
+| INCH     | income husband             |
+| AGE      | age of woman               |
+| TIME     | time identifier            |
+
+```{r}
+ggplot(dta)+geom_boxplot(aes(factor(TIME),INCH, fill=factor(LFP)))+ylim(3000,60000)
+```
+
+
+
+To analyse the labor force participation of married women, we specify the following model:
+
+$$LFP_{it}=1[\beta_1 AGE_{it}+\beta_2(INCH/1000)_{it}+\beta_3 KID1_{it}+\beta_4 KID2_{it}+\beta_5 KID3_{it}+\alpha_i+\epsilon_{it}>0],$$
+
+where $LFP_{it}$ indicates the labor force participation of a married woman, $AGE_{it}$ refers to the age, $(INCH/1000)_{it}$ is the husbands income in thousand dollars, and the $KID\ast_{it}$ variables refer to the number of kids in a certain age group.
+
+We start with a comparison of different methods to estimate logit models with fixed effects similiar to the section before. The following table reports the structural parameters ($\beta$) and the execution time for each method, where `bife.corr` refers to the results with analytical bias correction.
+
+|                | bife    | glm     | bife_corr | clogit  |
+|----------------|---------|---------|-----------|---------|
+| AGE            | 0.03787 | 0.03787 | 0.03395   | 0.03362 |
+| I(INCH / 1000) | -0.0087 | -0.0087 | -0.0076   | -0.0075 |
+| KID1           | -1.1743 | -1.1743 | -1.053    | -1.0301 |
+| KID2           | -0.569  | -0.569  | -0.5092   | -0.5001 |
+| KID3           | -0.0115 | -0.0115 | -0.0106   | -0.0102 |
+| Time in sec    | 0.035   | 340.296 | 0.037     | 0.077   |
+
+There are two things to highlight in this table. First `bife(..., bias_corr = "no")` and `glm(..., family = binomial())` deliver the same structural parameter estimates, but the execution time of `glm(..., family = binomial())` is about 10,000 times as long. Second the small $T$ leads to incidental parameters bias, but the analytical bias correction `(bife(..., bias_corr = "ana"))` is able to correct the structural parameters such that we get very competitive results compared to the unbiased alternative `survival::clogit()`.
+
+Next, we show how to estimate the specification above with `bife()`.
+
+
+
+```{r}
+mod_logit <- bife(LFP ~ AGE + I(INCH / 1000) + KID1 + KID2 + KID3 | ID, data = dta, bias_corr = "ana")
+summary(mod_logit)
+```
+
+The parameters of binary outcome variables are difficult to interpret quantitatively. In econometrics, partial effects 
+$$\frac{\partial Pr(y_{it}=1) }{\partial x_{iij}}$$
+
+are of more interest. Neither `glm()` nor `survival::clogit()` provide a routine to compute partial effects. This package provides the function `apeff_bife()` to compute average partial effects based on the estimated model provided by `bife()`. The user simply has to specify which of the variables are discrete and which type of bias correction should be used for the computation of the avarage partial effects. The left column named apeff refers to usual uncorrected average partial effects and the right column named apeff refers to semi-corrected average partial effects following Stammann, Heiss, and McFadden (2016).
+
+```{r}
+apeff_bife(mod_logit, discrete = c("KID1", "KID2", "KID3"), bias_corr = "ana")
+```
+
+`bife()` also offers the opportunity to estimate fixed effects probit models by specifiying `model = "probit"`.
+
+```{r}
+mod_probit <- bife(LFP ~ AGE + I(INCH / 1000) + KID1 + KID2 + KID3 | ID, 
+                   data = dta, bias_corr = "ana", model = "probit")
+summary(mod_probit)
+```
+
+Although the structural parameters are different compared to the logit model due to a different normalization, the average partial effects are similiar:
+
+```{r}
+apeff_bife(mod_probit, discrete = c("KID1", "KID2", "KID3"), bias_corr = "ana")
+```
+
+### Example: ACS PUMS 2014 — Large T
+
+The second example is based on a sample drawn from the American Community Survey (ACS PUMS 2014) were the panel structure is slightly different in comparison to the “classic” structure used in the section before. Instead of individual fixed effects we consider state fixed effects. $N$ can be now considered as the number of groups (states) and $T_i$ as the group size of group $i$.
+
+| var.  | Description                                                            |
+|-------|------------------------------------------------------------------------|
+| ST    | state identifier                                                       |
+| AGEP  | age of woman                                                           |
+| FER   | indicates if a woman gave birth to   a child within the past 12 months |
+| PINCP | total persons income                                                   |
+| LFP   | labor force participation                                              |
+
+
+In this example we observe a total of 662,775 married women in $N=51$ states. Since each state is of different population size, we end up with a highly unbalanced panel were the largest state consists of $T_{max}=74,752$ and the smallest of $T_{min}=855$ married women.
+
+The model can be described as follows:
+
+$$LFP_{it}=1[\beta_1 AGEP_{it}+\beta_2(PINCP/1000)_{it}+\beta_3 FER_{it}+\alpha_i+\epsilon_{it}>0],$$
+
+where $LFP_{it}$ indicates the labor force participation of a married woman, $AGEP_{it}$ refers to the age, $(PINCP/1000)_{it}$ is the total persons income in thousand dollars, and $FER_{it}$ indicates if a woman gave birth to a child within the past 12 months. In this example $i$ refers to one of the states and $t$ refers to one of the individuals observed in this state.
+
+As before, we start with a comparison of different methods to estimate logit models with fixed effects.
+
+|                 | bife    | glm     | bife_corr | clogit |
+|-----------------|---------|---------|-----------|--------|
+| AGEP            | -0.0757 | -0.0757 | -0.0757   | NA     |
+| I(PINCP / 1000) | 0.06769 | 0.06769 | 0.06769   | NA     |
+| FER             | -1.0004 | -1.0004 | -1.0003   | NA     |
+| Time in sec     | 1.658   | 18.923  | 1.933     | NA     |
+
+There are again two things to highlight. First since the bias of $\hat{\mathbf{\beta}}$ obtained from `bife(..., bias_corr = "no")` vanishes with large $T$, the bias correction is redundant. Second since the panel structure consists of very large $T$, `survival::clogit()` is not able to handle this dataset:
+
+```{r}
+acs <- acs
+```
+
+```{r}
+print(try(if(require("survival")) clogit(LFP ~ AGEP + I(PINCP / 1000) + FER + strata(ST), data = acs)))
+```
+
+
+Next, we will show how to analyse panel data with `bife(..., bias_corr = "no")` following the specification above.
+
+```{r}
+mod_logit <- bife(LFP ~ AGEP + I(PINCP / 1000) + FER | ST, data = acs, bias_corr = "no")
+summary(mod_logit)
+```
+
+
+```{r}
+apeff_bife(mod_logit, discrete = "FER")
+```
+
+Since we estimated a logit model without bias-correction, `apeff_bife()` delivers only one column with uncorrected average partial effects.
+
+---
+
+This example was based on lecture by [Daniel Czarnowske, Florian Heiss, Amrei Stammann](https://cran.r-project.org/web/packages/bife/vignettes/bife_introduction.html) and slightly modified.
