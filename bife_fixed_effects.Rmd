@@ -11,6 +11,7 @@ require(knitr)
 require(ggplot2)
 require(dplyr)
 require(bife)
+require(survival)
 ```
 
 
@@ -70,6 +71,19 @@ The first example is inspired by Hyslop (1999) who analysed the labor force part
 ggplot(dta)+geom_boxplot(aes(factor(TIME),INCH, fill=factor(LFP)))+ylim(3000,60000)
 ```
 
+```{r}
+benchmark <- data.frame(n=c(),bifet=c(),glmt=c(),clogitt=c())
+for(n in seq(50,450,50)){
+fragment <- dta[dta$ID %in% dta$ID[1:(n*9)],]
+bifet<-system.time(bife(LFP ~ AGE + I(INCH / 1000) + KID1 + KID2 + KID3 | ID, data = fragment, bias_corr = "ana"))[3]
+glmt<-system.time(glm(LFP ~ AGE + I(INCH / 1000) + KID1 + KID2 + KID3 + factor(ID), family = binomial(), data=fragment))[3]
+clogitt<-system.time(clogit(LFP ~ AGE + I(INCH / 1000) + KID1 + KID2 + KID3 + strata(ID), data=fragment))[3]
+benchmark <- rbind(benchmark, data.frame(n,bifet,glmt,clogitt))
+}
+benchmarkl <- tidyr::gather(benchmark, key= "method", value="time", -n)
+ggplot(benchmarkl)+geom_line(aes(n,time,group=method, color=method))+theme_minimal()
+#+ facet_wrap(~method,scale="free")
+```
 
 
 To analyse the labor force participation of married women, we specify the following model:
